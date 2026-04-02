@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { LifeEvent } from '../utils/eventTemplates';
-import { EVENT_TEMPLATES, createEventFromTemplate, reCalculateEndDate } from '../utils/eventTemplates';
+import { EVENT_TEMPLATES, reCalculateEndDate } from '../utils/eventTemplates';
 
 interface EventManagerProps {
   events: LifeEvent[];

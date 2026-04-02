@@ -13,20 +13,23 @@ interface ChartViewProps {
 }
 
 function EventStartLabel(props: any) {
-  const { viewBox, value, yOffset = 0 } = props;
-  if (!viewBox) return null;
+  const { viewBox, emojis = [] } = props;
+  if (!viewBox || !emojis.length) return null;
   return (
-    <text
-      x={(viewBox.x || 0) + 4}
-      y={14 + yOffset}
-      fill="#e2e8f0"
-      fontSize={10}
-      fontWeight={500}
-      fontFamily="Inter, sans-serif"
-      textAnchor="start"
-    >
-      {value}
-    </text>
+    <g>
+      {emojis.map((item: any, i: number) => (
+        <text
+          key={i}
+          x={(viewBox.x || 0) + 5}
+          y={25 + item.yOffset}
+          fontSize={18}
+          textAnchor="start"
+          style={{ cursor: 'default', userSelect: 'none' }}
+        >
+          {item.emoji}
+        </text>
+      ))}
+    </g>
   );
 }
 
@@ -45,6 +48,7 @@ function CustomTooltip({ active, payload }: any) {
   if (!d) return null;
 
   const gap = d.baselineBalance - d.balance;
+  const totalEventImpact = d.activeEvents.reduce((acc, ae) => acc + ae.oneTimeImpact + ae.recurringImpact, 0);
 
   return (
     <div className="chart-tooltip">
@@ -76,6 +80,12 @@ function CustomTooltip({ active, payload }: any) {
         <span>🛒 Expenses:</span>
         <span>{formatINR(d.expenses)}/mo</span>
       </div>
+      {totalEventImpact > 0 && (
+        <div className="tooltip-row tooltip-row-small">
+          <span>💸 Event Expenses:</span>
+          <span className="tooltip-value-negative">-{formatINR(totalEventImpact)}/mo</span>
+        </div>
+      )}
 
       {d.activeEvents.length > 0 && (
         <>
@@ -98,13 +108,31 @@ function CustomTooltip({ active, payload }: any) {
 export default function ChartView({ data, events }: ChartViewProps) {
   const hasEvents = events.length > 0;
 
-  // Group event starts by month to avoid overlapping lines
-  const startsByMonth = new Map<string, string[]>();
-  for (const event of events) {
+  // Group event starts by month and calculate vertical offsets
+  const startsByMonth = new Map<string, { emoji: string; yOffset: number }[]>();
+  const sortedEvents = [...events].sort((a, b) => a.date.localeCompare(b.date));
+  
+  let lastMonthIndex = -10;
+  let currentStackBase = 0;
+
+  for (const event of sortedEvents) {
     const dp = data.find(d => d.dateKey === event.date);
     if (!dp) continue;
+
+    const monthIdx = dp.monthIndex;
+    
+    // If events are within 3 months, stack them higher to avoid horizontal collision
+    if (monthIdx - lastMonthIndex < 3) {
+      currentStackBase++;
+    } else {
+      currentStackBase = 0;
+    }
+    lastMonthIndex = monthIdx;
+
     const existing = startsByMonth.get(dp.label) || [];
-    existing.push(event.label);
+    // If multiple events in SAME month, they also stack
+    const localOffset = existing.length * 25;
+    existing.push({ emoji: event.emoji, yOffset: (currentStackBase * 25) + localOffset });
     startsByMonth.set(dp.label, existing);
   }
 
@@ -163,14 +191,14 @@ export default function ChartView({ data, events }: ChartViewProps) {
             <Legend content={() => null} />
 
             {/* Vertical lines at event starts */}
-            {Array.from(startsByMonth.entries()).map(([xLabel, names], idx) => (
+            {Array.from(startsByMonth.entries()).map(([xLabel, emojiItems], idx) => (
               <ReferenceLine
                 key={`evt-line-${idx}`}
                 x={xLabel}
-                stroke="rgba(199, 210, 254, 0.45)"
+                stroke="rgba(199, 210, 254, 0.4)"
                 strokeDasharray="4 4"
                 strokeWidth={1}
-                label={<EventStartLabel value={names.join(', ')} yOffset={0} />}
+                label={<EventStartLabel emojis={emojiItems} />}
               />
             ))}
 
