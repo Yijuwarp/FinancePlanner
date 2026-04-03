@@ -320,6 +320,17 @@ body {
   color: var(--color-red) !important;
 }
 
+.tooltip-value-positive {
+  color: var(--color-green) !important;
+}
+
+.tooltip-row-cashflow {
+  border-top: 1px dashed var(--color-border);
+  padding-top: 6px !important;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
 .tooltip-events-header {
   font-size: 0.72rem;
   font-weight: 600;

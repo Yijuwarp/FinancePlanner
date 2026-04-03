@@ -48,6 +48,12 @@ export default function CurrencyInput({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let raw = e.target.value;
     
@@ -59,12 +65,6 @@ export default function CurrencyInput({
     }
 
     setDisplayValue(raw);
-    
-    // Attempt real-time parse for immediate feedback (e.g., updating charts)
-    const parsed = parseINR(raw);
-    if (parsed !== null) {
-      onChange(parsed);
-    }
   };
 
   return (
@@ -82,6 +82,7 @@ export default function CurrencyInput({
           onChange={handleChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           placeholder="0"
           className="currency-input"
           autoComplete="off"

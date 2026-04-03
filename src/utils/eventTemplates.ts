@@ -1,7 +1,6 @@
 import { addMonthsToDate } from './dateUtils';
 
 export interface LifeEvent {
-
   id: string;
   type: 'one_time' | 'duration' | 'job_loss';
   label: string;
@@ -24,6 +23,10 @@ export interface EventTemplate {
   defaultMonthlyImpact?: number;
   defaultDurationMonths?: number;
   description: string;
+  // Repeat defaults
+  defaultRepeatEnabled?: boolean;
+  defaultRepeatInterval?: number;
+  defaultRepeatUnit?: 'years' | 'months';
 }
 
 export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
@@ -53,6 +56,9 @@ export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
     defaultMonthlyImpact: 20000,
     defaultDurationMonths: 72,
     description: '₹5L down payment + ₹20K/month EMI (6 yrs)',
+    defaultRepeatEnabled: true,
+    defaultRepeatInterval: 5,
+    defaultRepeatUnit: 'years',
   },
   wedding: {
     label: 'Wedding',
@@ -67,6 +73,9 @@ export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
     type: 'one_time',
     defaultAmount: 100000,
     description: '₹1L one-time purchase',
+    defaultRepeatEnabled: true,
+    defaultRepeatInterval: 2,
+    defaultRepeatUnit: 'years',
   },
   emergency: {
     label: 'Emergency',
@@ -80,7 +89,7 @@ export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
     emoji: '⚠️',
     type: 'job_loss',
     defaultAmount: 0,
-    defaultMonthlyImpact: 100000, // Used as extra cost during job loss
+    defaultMonthlyImpact: 100000,
     defaultDurationMonths: 6,
     description: '0 salary + ₹1L/month expenses (6 months)',
   },
@@ -90,6 +99,9 @@ export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
     type: 'one_time',
     defaultAmount: 100000,
     description: '₹1L domestic vacation',
+    defaultRepeatEnabled: true,
+    defaultRepeatInterval: 1,
+    defaultRepeatUnit: 'years',
   },
   intl_trip: {
     label: 'International Vacation',
@@ -97,6 +109,9 @@ export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
     type: 'one_time',
     defaultAmount: 350000,
     description: '₹3.5L international vacation',
+    defaultRepeatEnabled: true,
+    defaultRepeatInterval: 1,
+    defaultRepeatUnit: 'years',
   },
   education: {
     label: 'Higher Education',
@@ -134,7 +149,6 @@ export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
   },
 };
 
-
 export function reCalculateEndDate(date: string, durationMonths: number): string {
   return addMonthsToDate(date, durationMonths);
 }
@@ -157,22 +171,6 @@ export function createEventFromTemplate(
   const durationMonths = template.defaultDurationMonths || 0;
   const endDate = durationMonths > 0 ? addMonthsToDate(date, durationMonths) : undefined;
 
-  let repeatEnabled = false;
-  let repeatInterval = 1;
-  let repeatUnit: 'years' | 'months' = 'years';
-
-  // Smart defaults for certain event types
-  if (templateKey === 'domestic_trip' || templateKey === 'intl_trip') {
-    repeatEnabled = true;
-    repeatInterval = 1;
-  } else if (templateKey === 'phone') {
-    repeatEnabled = true;
-    repeatInterval = 2;
-  } else if (templateKey === 'car') {
-    repeatEnabled = true;
-    repeatInterval = 5;
-  }
-
   return {
     id,
     type: template.type,
@@ -183,9 +181,8 @@ export function createEventFromTemplate(
     monthlyImpact: template.defaultMonthlyImpact,
     durationMonths: durationMonths > 0 ? durationMonths : undefined,
     endDate,
-    repeatEnabled,
-    repeatInterval,
-    repeatUnit,
+    repeatEnabled: template.defaultRepeatEnabled || false,
+    repeatInterval: template.defaultRepeatInterval,
+    repeatUnit: template.defaultRepeatUnit,
   };
 }
-

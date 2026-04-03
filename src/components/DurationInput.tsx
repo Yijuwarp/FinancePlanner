@@ -47,13 +47,21 @@ export default function DurationInput({
     }
   }, [value, unit, displayValue]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    setDisplayValue(raw);
-    const num = parseFloat(raw);
+  const handleBlur = () => {
+    const num = parseFloat(displayValue);
     if (!isNaN(num)) {
       onChange(unit === 'years' ? Math.round(num * 12) : Math.round(num));
     }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDisplayValue(e.target.value);
   };
 
   const toggleUnit = (newUnit: DurationUnit) => {
@@ -81,6 +89,8 @@ export default function DurationInput({
             type="number"
             value={displayValue}
             onChange={handleChange}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
             step={unit === 'years' ? 0.1 : 1}
             min={0}
             className="currency-input" // shares styles with currency input

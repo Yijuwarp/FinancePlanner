@@ -1,4 +1,4 @@
-import { useDeferredValue, lazy, Suspense, memo } from 'react';
+import { useDeferredValue, lazy, Suspense, memo, useMemo } from 'react';
 import { FinanceProvider, useFinance } from './context/FinanceContext';
 import InputPanel from './components/InputPanel';
 import EventManager from './components/EventManager';
@@ -9,7 +9,7 @@ import { useSimulation } from './hooks/useSimulation';
 // copy via resolve.dedupe — the original root cause of the dispatcher error.
 const ChartView = lazy(() => import('./components/ChartView'));
 
-// Simple loading placeholder for the chart (still kept for structure)
+// Simple loading placeholder for the chart
 const ChartSkeleton = () => (
   <div className="chart-view" style={{ height: '450px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
     <div className="animate-pulse flex flex-col items-center gap-4">
@@ -20,69 +20,26 @@ const ChartSkeleton = () => (
 );
 
 /**
- * Main Content Component: Consumes FinanceContext and runs simulation.
- * Decoupled from the FinanceProvider to prevent full app re-renders on context updates.
+ * Heavy results container. ONLY re-renders when deferred values change.
+ * This is the core of the 60fps interaction strategy.
  */
-const AppContent = memo(() => {
-  const {
-    balance, salary, expenses, years,
-    inflation, salaryGrowth, returns,
-    retireYears, scaleEventsWithInflation,
-    events, highlightedEventId, filterLevel,
-    setBalance, setSalary, setExpenses, setYears,
-    setInflation, setSalaryGrowth, setReturns,
-    setRetireYears, setScaleEventsWithInflation,
-    addEvent, updateEvent, removeEvent, highlightEvent,
-    setFilterLevel
-  } = useFinance();
-
-  // Defer simulation inputs to allow UI to stay responsive during rapid sliding
-  const deferredBalance = useDeferredValue(balance);
-  const deferredSalary = useDeferredValue(salary);
-  const deferredExpenses = useDeferredValue(expenses);
-  const deferredYears = useDeferredValue(years);
-  const deferredInflation = useDeferredValue(inflation);
-  const deferredSalaryGrowth = useDeferredValue(salaryGrowth);
-  const deferredReturns = useDeferredValue(returns);
-  const deferredEvents = useDeferredValue(events);
-  const deferredRetireYears = useDeferredValue(retireYears);
-  const deferredScaleEventsWithInflation = useDeferredValue(scaleEventsWithInflation);
-
-  // Run the throttled simulation logic
-  const { data, insights } = useSimulation({
-    balance: deferredBalance,
-    salary: deferredSalary,
-    expenses: deferredExpenses,
-    years: deferredYears,
-    inflation: deferredInflation,
-    salaryGrowth: deferredSalaryGrowth,
-    returns: deferredReturns,
-    events: deferredEvents,
-    retireYears: deferredRetireYears,
-    scaleEventsWithInflation: deferredScaleEventsWithInflation,
-  });
-
-  const isLagging = 
-    deferredBalance !== balance ||
-    deferredSalary !== salary ||
-    deferredExpenses !== expenses ||
-    deferredYears !== years ||
-    deferredInflation !== inflation ||
-    deferredSalaryGrowth !== salaryGrowth ||
-    deferredReturns !== returns ||
-    deferredEvents !== events ||
-    deferredRetireYears !== retireYears;
+const DeferredResults = memo(({ 
+  state, 
+  isLagging,
+  setFilterLevel 
+}: any) => {
+  const { data, insights } = useSimulation(state);
 
   return (
-    <main className="app-main">
+    <>
       {/* Chart - Hero section */}
       <section className="chart-section" id="chart-section">
         <Suspense fallback={<ChartSkeleton />}>
           <ChartView
             data={data}
-            events={deferredEvents}
-            highlightedEventId={highlightedEventId}
-            filterLevel={filterLevel}
+            events={state.events}
+            highlightedEventId={state.highlightedEventId}
+            filterLevel={state.filterLevel}
             isLagging={isLagging}
           />
         </Suspense>
@@ -92,7 +49,7 @@ const AppContent = memo(() => {
             <label htmlFor="impact-filter" className="filter-label">Show markers for:</label>
             <select 
               id="impact-filter" 
-              value={filterLevel} 
+              value={state.filterLevel} 
               onChange={(e) => setFilterLevel(e.target.value as any)}
               className="filter-select"
             >
@@ -111,6 +68,52 @@ const AppContent = memo(() => {
       <section className="insights-section" id="insights-section">
         <Insights insights={insights} />
       </section>
+    </>
+  );
+});
+
+/**
+ * Main Content Component: Splits state into high-frequency and deferred streams.
+ */
+const AppContent = memo(() => {
+  const finance = useFinance();
+
+  // HIGH FREQUENCY: These are passed directly to inputs for 60fps local feedback
+  const {
+    balance, salary, expenses, years,
+    inflation, salaryGrowth, returns,
+    retireYears, scaleEventsWithInflation,
+    events, highlightedEventId, filterLevel,
+    setBalance, setSalary, setExpenses, setYears,
+    setInflation, setSalaryGrowth, setReturns,
+    setRetireYears, setScaleEventsWithInflation,
+    addEvent, updateEvent, removeEvent, highlightEvent,
+    setFilterLevel
+  } = finance;
+
+  // LOW FREQUENCY: Defer the entire state object for heavy calculations
+  // We use useMemo to create a stable object that only changes when the values change
+  const currentState = useMemo(() => ({
+    balance, salary, expenses, years, inflation,
+    salaryGrowth, returns, events, retireYears,
+    scaleEventsWithInflation, highlightedEventId, filterLevel
+  }), [
+    balance, salary, expenses, years, inflation,
+    salaryGrowth, returns, events, retireYears,
+    scaleEventsWithInflation, highlightedEventId, filterLevel
+  ]);
+
+  const deferredState = useDeferredValue(currentState);
+  const isLagging = currentState !== deferredState;
+
+  return (
+    <main className="app-main">
+      <DeferredResults 
+        state={deferredState} 
+        isLagging={isLagging}
+        highlightEvent={highlightEvent}
+        setFilterLevel={setFilterLevel}
+      />
 
       {/* Controls */}
       <section className="controls-section" id="controls-section">

@@ -46,9 +46,9 @@ const EventForm = memo(({
       setMonthlyImpact(template.defaultMonthlyImpact || 0);
       setDurationMonths(template.defaultDurationMonths || 24);
       setDurationUnit(template.defaultDurationMonths && template.defaultDurationMonths >= 12 && template.defaultDurationMonths % 12 === 0 ? 'years' : 'months');
-      setRepeatEnabled(false);
-      setRepeatInterval(1);
-      setRepeatUnit('years');
+      setRepeatEnabled(template.defaultRepeatEnabled || false);
+      setRepeatInterval(template.defaultRepeatInterval || 1);
+      setRepeatUnit(template.defaultRepeatUnit || 'years');
     }
   }, [template, editingEvent]);
 

@@ -45,6 +45,8 @@ export interface MonthData {
   salary: number;
   expenses: number;
   activeEvents: ActiveEventInfo[];
+  returnsEarned: number;
+  netCashFlow: number;
 }
 
 /**
@@ -119,9 +121,10 @@ function preprocessEvents(
         });
       } else {
         // Duration or Job Loss
-        const endIdx = event.endDate
-          ? dateKeyToIndex(event.endDate, startYear, startMonth)
-          : idx + (event.durationMonths || 24) - 1;
+        const instanceDuration = event.durationMonths || 24;
+        const endIdx = isRepeat 
+          ? idx + instanceDuration - 1
+          : (event.endDate ? dateKeyToIndex(event.endDate, startYear, startMonth) : idx + instanceDuration - 1);
         
         if (endIdx < idx) return;
 
@@ -224,14 +227,26 @@ export function runSimulation(input: SimulationInput): MonthData[] {
 
     // Apply income/expense for simulation balance
     if (!jobLossActive && !isRetired) balance += currentSalary;
-    balance -= currentExpenses;
-
-    for (const ae of activeEvents) {
-      balance -= ae.oneTimeImpact;
-      balance -= ae.recurringImpact;
+    
+    // Sum impacts efficiently
+    let monthOneTimeImpact = 0;
+    let monthRecurringImpact = 0;
+    for (let j = 0; j < activeEvents.length; j++) {
+      monthOneTimeImpact += activeEvents[j].oneTimeImpact;
+      monthRecurringImpact += activeEvents[j].recurringImpact;
     }
+    
+    // Inflation for core expenses is now tied to the same toggle
+    const adjustedExpenses = input.scaleEventsWithInflation ? currentExpenses : input.expenses;
+    
+    balance -= adjustedExpenses;
+    balance -= monthOneTimeImpact;
+    balance -= monthRecurringImpact;
 
-    if (balance > 0) balance *= (1 + monthlyReturns);
+    const netCashFlow = currentSalary - adjustedExpenses - monthOneTimeImpact - monthRecurringImpact;
+
+    const returnsEarned = balance > 0 ? balance * monthlyReturns : 0;
+    if (balance > 0) balance += returnsEarned;
 
     results.push({
       monthIndex: i,
@@ -240,8 +255,10 @@ export function runSimulation(input: SimulationInput): MonthData[] {
       balance: Math.round(balance),
       baselineBalance: Math.round(baselineBalance),
       salary: Math.round(currentSalary),
-      expenses: Math.round(currentExpenses),
+      expenses: Math.round(adjustedExpenses),
       activeEvents: [...activeEvents],
+      returnsEarned: Math.round(returnsEarned),
+      netCashFlow: Math.round(netCashFlow),
     });
   }
 

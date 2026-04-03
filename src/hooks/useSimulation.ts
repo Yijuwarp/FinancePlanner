@@ -48,7 +48,7 @@ export function useSimulation(props: UseSimulationProps): UseSimulationResult {
     timeoutRef.current = window.setTimeout(() => {
       setThrottledInput(props);
       timeoutRef.current = null;
-    }, 32); // 32ms (~30fps simulation updates)
+    }, 50); // 50ms (~20fps simulation updates)
 
     return () => {
       if (timeoutRef.current !== null) {

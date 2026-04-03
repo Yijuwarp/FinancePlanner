@@ -31,7 +31,6 @@ const ChartTooltip = memo(({ active, payload }: ChartTooltipProps) => {
   const d = payload[0]?.payload as MonthData;
   if (!d) return null;
 
-  const gap = d.baselineBalance - d.balance;
   const totalEventImpact = d.activeEvents.reduce(
     (acc, ae) => acc + ae.oneTimeImpact + ae.recurringImpact, 
     0
@@ -51,17 +50,15 @@ const ChartTooltip = memo(({ active, payload }: ChartTooltipProps) => {
         <span>With Events:</span>
         <span className="tooltip-value">{formatINR(d.balance)}</span>
       </div>
-      {gap > 0 && (
-        <div className="tooltip-row tooltip-row-gap">
-          <span>Gap:</span>
-          <span className="tooltip-value tooltip-value-negative">-{formatINR(gap)}</span>
-        </div>
-      )}
 
       <div className="tooltip-divider" />
       <div className="tooltip-row tooltip-row-small">
         <span>💼 Salary:</span>
-        <span>{formatINR(d.salary)}/mo</span>
+        <span className="tooltip-value-positive">+{formatINR(d.salary)}/mo</span>
+      </div>
+      <div className="tooltip-row tooltip-row-small">
+        <span>💹 Returns:</span>
+        <span className="tooltip-value-positive">+{formatINR(d.returnsEarned)}/mo</span>
       </div>
       <div className="tooltip-row tooltip-row-small">
         <span>🛒 Expenses:</span>
@@ -73,6 +70,13 @@ const ChartTooltip = memo(({ active, payload }: ChartTooltipProps) => {
           <span className="tooltip-value-negative">-{formatINR(totalEventImpact)}/mo</span>
         </div>
       )}
+      <div className="tooltip-divider" />
+      <div className="tooltip-row tooltip-row-cashflow">
+        <span>🔄 Total Cash Flow:</span>
+        <span className={d.netCashFlow + d.returnsEarned >= 0 ? "tooltip-value-positive" : "tooltip-value-negative"}>
+          {d.netCashFlow + d.returnsEarned >= 0 ? '+' : ''}{formatINR(d.netCashFlow + d.returnsEarned)}/mo
+        </span>
+      </div>
 
       {d.activeEvents.length > 0 && (
         <>

@@ -109,7 +109,7 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
 
   // Adjust X-axis label frequency based on data length
   const tickInterval = useMemo(() => 
-    Math.max(1, Math.floor(data.length / 12)) - 1, 
+    Math.max(1, Math.floor(data.length / 10)) - 1, 
     [data.length]
   );
 
@@ -165,8 +165,8 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
             <Tooltip content={<ChartTooltip />} />
             <Legend content={() => null} />
 
-            {/* Vertical lines at event starts - disabled during lagging for performance */}
-            {!isLagging && Array.from(startsByMonth.entries()).map(([xLabel, emojiItems], idx) => (
+            {/* Vertical lines at event starts - always mounted to prevent tooltip resets */}
+            {Array.from(startsByMonth.entries()).map(([xLabel, emojiItems], idx) => (
               <ReferenceLine
                 key={`evt-line-${idx}`}
                 x={xLabel}
@@ -174,6 +174,7 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
                 strokeDasharray="4 4"
                 strokeWidth={1}
                 label={<EventStartLabel emojis={emojiItems} />}
+                className={isLagging ? 'chart-line-lagging' : ''}
               />
             ))}
 
@@ -187,7 +188,7 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
               dot={false}
               activeDot={{ r: 4, stroke: '#22c55e', fill: '#0f172a' }}
               animationDuration={isLagging ? 0 : 500}
-              isAnimationActive={!isLagging}
+              isAnimationActive={true}
             />
 
             {hasEvents && (
@@ -201,7 +202,7 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
                 dot={false}
                 activeDot={{ r: 4, stroke: '#ef4444', fill: '#0f172a' }}
                 animationDuration={isLagging ? 0 : 500}
-                isAnimationActive={!isLagging}
+                isAnimationActive={true}
               />
             )}
           </AreaChart>

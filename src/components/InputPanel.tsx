@@ -1,4 +1,4 @@
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import CurrencyInput from './CurrencyInput';
 
 /**
@@ -47,12 +47,19 @@ function SliderInput({
   unit: string;
   id: string;
 }) {
+  const [localValue, setLocalValue] = useState(value);
+
+  // Sync with external value changes (e.g., resets)
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
   return (
     <div className="input-field-group">
       <label htmlFor={id} className="input-label">
         {label}
         <span className="input-value-badge">
-          {value}{unit}
+          {localValue}{unit}
         </span>
       </label>
       <input
@@ -61,8 +68,9 @@ function SliderInput({
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
+        value={localValue}
+        onInput={(e) => setLocalValue(parseFloat((e.target as HTMLInputElement).value))}
+        onPointerUp={() => onChange(localValue)}
         className="slider-input"
       />
       <div className="slider-range">
@@ -79,6 +87,12 @@ function SliderInput({
  */
 const InputPanel = memo((props: InputPanelProps) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [localRetireYears, setLocalRetireYears] = useState(props.retireYears);
+
+  // Sync with external value changes (e.g., resets)
+  useEffect(() => {
+    setLocalRetireYears(props.retireYears);
+  }, [props.retireYears]);
 
   return (
     <div className="input-panel">
@@ -114,8 +128,14 @@ const InputPanel = memo((props: InputPanelProps) => {
               <input
                 id="retire-input"
                 type="number"
-                value={props.retireYears}
-                onChange={(e) => props.onRetireYearsChange(parseInt(e.target.value) || 0)}
+                value={localRetireYears}
+                onChange={(e) => setLocalRetireYears(parseInt(e.target.value) || 0)}
+                onBlur={(e) => props.onRetireYearsChange(parseInt(e.target.value) || 0)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
                 className="currency-input no-spin"
               />
               <span className="input-suffix">yrs</span>
@@ -136,7 +156,7 @@ const InputPanel = memo((props: InputPanelProps) => {
           value={props.years}
           onChange={props.onYearsChange}
           min={1}
-          max={30}
+          max={50}
           step={1}
           unit=" yrs"
         />
