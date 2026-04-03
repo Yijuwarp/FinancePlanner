@@ -1,4 +1,5 @@
 import type { LifeEvent } from './eventTemplates';
+import { formatINRShort } from './formatINR';
 
 export interface SimulationInput {
   balance: number;
@@ -9,15 +10,20 @@ export interface SimulationInput {
   salaryGrowth: number;
   returns: number;
   events: LifeEvent[];
+  retireYears: number;
+  scaleEventsWithInflation: boolean;
 }
 
 export interface ActiveEventInfo {
   id: string;
   label: string;
+  emoji?: string;
   type: 'one_time' | 'duration' | 'job_loss';
   oneTimeImpact: number;
   recurringImpact: number;
   isStart: boolean;
+  isRepeat?: boolean;
+  impactLevel?: 'low' | 'medium' | 'high';
 }
 
 export interface MonthData {
@@ -35,8 +41,17 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function dateKeyToIndex(dateKey: string, startYear: number, startMonth: number): number {
+  if (!dateKey || !dateKey.includes('-')) return -1;
   const [y, m] = dateKey.split('-').map(Number);
+  if (isNaN(y) || isNaN(m)) return -1;
   return (y - startYear) * 12 + (m - startMonth);
+}
+
+function calculateImpact(oneTime: number, recurring: number, salary: number): 'low' | 'medium' | 'high' {
+  const s = Math.max(salary, 1); // Avoid division by zero
+  if (oneTime > s || recurring > s * 0.33) return 'high';
+  if (oneTime > s * 0.5 || recurring > s * 0.15) return 'medium';
+  return 'low';
 }
 
 export function runSimulation(input: SimulationInput): MonthData[] {
@@ -48,39 +63,141 @@ export function runSimulation(input: SimulationInput): MonthData[] {
   const monthlyInflation = Math.pow(1 + input.inflation / 100, 1 / 12) - 1;
   const monthlySalaryGrowth = Math.pow(1 + input.salaryGrowth / 100, 1 / 12) - 1;
   const monthlyReturns = Math.pow(1 + input.returns / 100, 1 / 12) - 1;
+  const retireInMonths = input.retireYears * 12;
+
+  // Track salary for impact calculation reference
+  const getSalaryAt = (idx: number) => {
+    const monthsOfGrowth = Math.min(idx, retireInMonths - 1);
+    const s = input.salary * Math.pow(1 + monthlySalaryGrowth, Math.max(0, monthsOfGrowth));
+    return Math.max(s, 1);
+  };
 
   // Pre-process events
-  const oneTimeEvents = new Map<number, { id: string; amount: number; label: string }[]>();
+  const oneTimeEvents = new Map<number, { 
+    id: string; amount: number; label: string; emoji: string; isRepeat: boolean; impactLevel: 'low' | 'medium' | 'high' 
+  }[]>();
+  
+  const addOneTime = (idx: number, eventData: { id: string; amount: number; label: string; emoji: string; isRepeat: boolean; impactLevel: 'low' | 'medium' | 'high' }) => {
+    const existing = oneTimeEvents.get(idx) || [];
+    existing.push(eventData);
+    oneTimeEvents.set(idx, existing);
+  };
+
   const durationEvents: {
     id: string; startIdx: number; endIdx: number;
-    monthlyImpact: number; label: string; oneTimeAmount: number;
-    type: 'duration' | 'job_loss';
+    monthlyImpact: number; label: string; emoji: string; oneTimeAmount: number;
+    type: 'duration' | 'job_loss'; isRepeat: boolean; impactLevel: 'low' | 'medium' | 'high';
   }[] = [];
 
   for (const event of input.events) {
     const eventIdx = dateKeyToIndex(event.date, startYear, startMonth);
+    if (eventIdx === -1) continue;
+
+    const getMultiplier = (idx: number) => {
+      if (isNaN(idx) || idx < 0) return 1;
+      return input.scaleEventsWithInflation ? Math.pow(1 + monthlyInflation, idx) : 1;
+    };
 
     if (event.type === 'one_time') {
-      const existing = oneTimeEvents.get(eventIdx) || [];
-      existing.push({ id: event.id, amount: event.amount || 0, label: event.label });
-      oneTimeEvents.set(eventIdx, existing);
+      if (eventIdx >= 0 && eventIdx < totalMonths) {
+        const amt = (event.amount || 0) * getMultiplier(eventIdx);
+        addOneTime(eventIdx, { 
+          id: event.id, 
+          amount: amt, 
+          label: event.label,
+          emoji: event.emoji,
+          isRepeat: false,
+          impactLevel: calculateImpact(amt, 0, getSalaryAt(eventIdx))
+        });
+      }
+
+      // Handle repeats
+      if (event.repeatEnabled && event.repeatInterval && event.repeatInterval > 0) {
+        const intervalMonths = event.repeatUnit === 'months' ? event.repeatInterval : event.repeatInterval * 12;
+        if (intervalMonths > 0) {
+          let nextIdx = eventIdx + intervalMonths;
+          while (nextIdx < totalMonths) {
+            if (nextIdx >= 0) {
+              const amt = (event.amount || 0) * getMultiplier(nextIdx);
+              addOneTime(nextIdx, { 
+                id: `${event.id}-rep-${nextIdx}`, 
+                amount: amt, 
+                label: event.label,
+                emoji: event.emoji,
+                isRepeat: true,
+                impactLevel: calculateImpact(amt, 0, getSalaryAt(nextIdx))
+              });
+            }
+            nextIdx += intervalMonths;
+          }
+        }
+      }
     } else if (event.type === 'duration') {
       const endIdx = event.endDate
         ? dateKeyToIndex(event.endDate, startYear, startMonth)
-        : eventIdx + (event.durationMonths || 12) - 1;
+        : eventIdx + (event.durationMonths || 24) - 1;
+      
+      if (endIdx === -1 || isNaN(endIdx)) continue;
+      
+      const durationLength = endIdx - eventIdx;
+      const initialAmt = (event.amount || 0) * getMultiplier(eventIdx);
+      const initialMonthly = (event.monthlyImpact || 0) * getMultiplier(eventIdx);
+
       durationEvents.push({
         id: event.id, startIdx: eventIdx, endIdx,
-        monthlyImpact: event.monthlyImpact || 0, label: event.label,
-        oneTimeAmount: event.amount || 0, type: 'duration',
+        monthlyImpact: initialMonthly, 
+        label: event.label,
+        emoji: event.emoji,
+        oneTimeAmount: initialAmt, 
+        type: 'duration',
+        isRepeat: false,
+        impactLevel: calculateImpact(initialAmt, initialMonthly, getSalaryAt(eventIdx))
       });
+
+      // Handle repeats
+      if (event.repeatEnabled && event.repeatInterval && event.repeatInterval > 0) {
+        const intervalMonths = event.repeatUnit === 'months' ? event.repeatInterval : event.repeatInterval * 12;
+        if (intervalMonths > 0) {
+          let nextIdx = eventIdx + intervalMonths;
+          while (nextIdx < totalMonths) {
+            if (nextIdx >= 0) {
+              const m = getMultiplier(nextIdx);
+              const amt = (event.amount || 0) * m;
+              const monthly = (event.monthlyImpact || 0) * m;
+              durationEvents.push({
+                id: `${event.id}-rep-${nextIdx}`, 
+                startIdx: nextIdx, 
+                endIdx: nextIdx + durationLength,
+                monthlyImpact: monthly, 
+                label: event.label,
+                emoji: event.emoji,
+                oneTimeAmount: amt, 
+                type: 'duration',
+                isRepeat: true,
+                impactLevel: calculateImpact(amt, monthly, getSalaryAt(nextIdx))
+              });
+            }
+            nextIdx += intervalMonths;
+          }
+        }
+      }
     } else if (event.type === 'job_loss') {
       const endIdx = event.endDate
         ? dateKeyToIndex(event.endDate, startYear, startMonth)
         : eventIdx + (event.durationMonths || 6) - 1;
+      
+      const m = getMultiplier(eventIdx);
+      const amt = (event.amount || 0) * m;
+      const monthly = (event.monthlyImpact || 0) * m;
       durationEvents.push({
         id: event.id, startIdx: eventIdx, endIdx,
-        monthlyImpact: event.monthlyImpact || 0, label: event.label,
-        oneTimeAmount: event.amount || 0, type: 'job_loss',
+        monthlyImpact: monthly, 
+        label: event.label,
+        emoji: event.emoji,
+        oneTimeAmount: amt, 
+        type: 'job_loss',
+        isRepeat: false,
+        impactLevel: calculateImpact(amt, monthly, getSalaryAt(eventIdx))
       });
     }
   }
@@ -92,6 +209,7 @@ export function runSimulation(input: SimulationInput): MonthData[] {
   let currentExpenses = input.expenses;
 
   for (let i = 0; i < totalMonths; i++) {
+    const isRetired = i >= retireInMonths;
     const currentMonth = ((startMonth - 1 + i) % 12) + 1;
     const currentYear = startYear + Math.floor((startMonth - 1 + i) / 12);
     const yearShort = currentYear % 100;
@@ -99,12 +217,12 @@ export function runSimulation(input: SimulationInput): MonthData[] {
     const dateKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
     if (i > 0) {
-      currentSalary *= (1 + monthlySalaryGrowth);
+      if (!isRetired) currentSalary *= (1 + monthlySalaryGrowth);
       currentExpenses *= (1 + monthlyInflation);
     }
 
-    // Baseline
-    baselineBalance += currentSalary;
+    // Baseline calculation
+    if (!isRetired) baselineBalance += currentSalary;
     baselineBalance -= currentExpenses;
     if (baselineBalance > 0) baselineBalance *= (1 + monthlyReturns);
 
@@ -115,18 +233,21 @@ export function runSimulation(input: SimulationInput): MonthData[] {
     for (const de of durationEvents) {
       if (i >= de.startIdx && i <= de.endIdx) {
         const isStart = i === de.startIdx;
+        
         if (de.type === 'job_loss') {
           jobLossActive = true;
           activeEvents.push({
-            id: de.id, label: de.label, type: 'job_loss',
+            id: de.id, label: de.label, emoji: de.emoji, type: 'job_loss',
             oneTimeImpact: isStart ? de.oneTimeAmount : 0,
             recurringImpact: de.monthlyImpact, isStart,
+            isRepeat: de.isRepeat, impactLevel: de.impactLevel
           });
         } else {
           activeEvents.push({
-            id: de.id, label: de.label, type: 'duration',
+            id: de.id, label: de.label, emoji: de.emoji, type: 'duration',
             oneTimeImpact: isStart ? de.oneTimeAmount : 0,
             recurringImpact: de.monthlyImpact, isStart,
+            isRepeat: de.isRepeat, impactLevel: de.impactLevel
           });
         }
       }
@@ -136,23 +257,21 @@ export function runSimulation(input: SimulationInput): MonthData[] {
     if (oneTimeHits) {
       for (const hit of oneTimeHits) {
         activeEvents.push({
-          id: hit.id, label: hit.label, type: 'one_time',
-          oneTimeImpact: hit.amount, recurringImpact: 0, isStart: true,
+          id: hit.id, label: hit.label, emoji: hit.emoji, type: 'one_time',
+          oneTimeImpact: hit.amount, recurringImpact: 0, 
+          isStart: true, isRepeat: hit.isRepeat,
+          impactLevel: hit.impactLevel
         });
       }
     }
 
     // Apply financial impacts
-    if (!jobLossActive) balance += currentSalary;
+    if (!jobLossActive && !isRetired) balance += currentSalary;
     balance -= currentExpenses;
 
     for (const ae of activeEvents) {
-      if (ae.type === 'one_time') {
-        balance -= ae.oneTimeImpact;
-      } else if (ae.type === 'duration' || ae.type === 'job_loss') {
-        balance -= ae.oneTimeImpact;
-        balance -= ae.recurringImpact;
-      }
+      balance -= ae.oneTimeImpact;
+      balance -= ae.recurringImpact;
     }
 
     if (balance > 0) balance *= (1 + monthlyReturns);
@@ -161,7 +280,7 @@ export function runSimulation(input: SimulationInput): MonthData[] {
       monthIndex: i, label, dateKey,
       balance: Math.round(balance),
       baselineBalance: Math.round(baselineBalance),
-      salary: Math.round(currentSalary),
+      salary: isRetired ? 0 : Math.round(currentSalary),
       expenses: Math.round(currentExpenses),
       activeEvents,
     });
@@ -198,7 +317,7 @@ export function generateInsights(data: MonthData[]): Insight[] {
   }
   insights.push({
     type: lowestBalance < 0 ? 'danger' : 'warning', icon: '📉',
-    message: `Lowest balance: ₹${Math.abs(lowestBalance).toLocaleString('en-IN')} ${lowestBalance < 0 ? '(deficit)' : ''} in ${lowestMonth.label}`,
+    message: `Lowest balance: ₹${formatINRShort(Math.abs(lowestBalance))} ${lowestBalance < 0 ? '(deficit)' : ''} in ${lowestMonth.label}`,
   });
 
   if (negativeMonth) {
@@ -222,14 +341,14 @@ export function generateInsights(data: MonthData[]): Insight[] {
   if (diff > 0) {
     insights.push({
       type: 'info', icon: '💡',
-      message: `Life events cost you ₹${diff.toLocaleString('en-IN')} over the projected period`,
+      message: `Life events cost you ₹${formatINRShort(diff)} over the projected period`,
     });
   }
 
   if (!negativeMonth) {
     insights.push({
       type: 'success', icon: '✅',
-      message: `You stay financially positive! Final balance: ₹${finalData.balance.toLocaleString('en-IN')}`,
+      message: `You stay financially positive! Final balance: ₹${formatINRShort(finalData.balance)}`,
     });
   }
 

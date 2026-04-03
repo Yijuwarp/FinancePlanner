@@ -8,6 +8,9 @@ export interface LifeEvent {
   monthlyImpact?: number; // recurring monthly cost
   endDate?: string; // YYYY-MM for duration events
   durationMonths?: number; // alternative to endDate
+  repeatEnabled?: boolean;
+  repeatInterval?: number;
+  repeatUnit?: 'years' | 'months';
 }
 
 export interface EventTemplate {
@@ -129,7 +132,9 @@ export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
 };
 
 export function reCalculateEndDate(date: string, durationMonths: number): string {
+  if (!date || !date.includes('-')) return date;
   const [year, month] = date.split('-').map(Number);
+  if (isNaN(year) || isNaN(month)) return date;
   const endMonthTotal = month + durationMonths - 1;
   const endYear = year + Math.floor((endMonthTotal - 1) / 12);
   const endMonthNorm = ((endMonthTotal - 1) % 12) + 1;
@@ -145,6 +150,21 @@ export function createEventFromTemplate(
   const durationMonths = template.defaultDurationMonths || 0;
   const endDate = durationMonths > 0 ? reCalculateEndDate(date, durationMonths) : undefined;
 
+  let repeatEnabled = false;
+  let repeatInterval = 1;
+  let repeatUnit: 'years' | 'months' = 'years';
+
+  if (templateKey === 'domestic_trip' || templateKey === 'intl_trip') {
+    repeatEnabled = true;
+    repeatInterval = 1;
+  } else if (templateKey === 'phone') {
+    repeatEnabled = true;
+    repeatInterval = 2;
+  } else if (templateKey === 'car') {
+    repeatEnabled = true;
+    repeatInterval = 5;
+  }
+
   return {
     id,
     type: template.type,
@@ -155,5 +175,8 @@ export function createEventFromTemplate(
     monthlyImpact: template.defaultMonthlyImpact,
     durationMonths: durationMonths > 0 ? durationMonths : undefined,
     endDate,
+    repeatEnabled,
+    repeatInterval,
+    repeatUnit,
   };
 }

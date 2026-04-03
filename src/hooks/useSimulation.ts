@@ -12,6 +12,8 @@ export interface UseSimulationProps {
   salaryGrowth: number;
   returns: number;
   events: LifeEvent[];
+  retireYears: number;
+  scaleEventsWithInflation: boolean;
 }
 
 export interface UseSimulationResult {
@@ -20,7 +22,7 @@ export interface UseSimulationResult {
 }
 
 export function useSimulation(props: UseSimulationProps): UseSimulationResult {
-  const { balance, salary, expenses, years, inflation, salaryGrowth, returns, events } = props;
+  const { balance, salary, expenses, years, inflation, salaryGrowth, returns, events, retireYears, scaleEventsWithInflation } = props;
 
   const data = useMemo(() => {
     const input: SimulationInput = {
@@ -32,9 +34,11 @@ export function useSimulation(props: UseSimulationProps): UseSimulationResult {
       salaryGrowth,
       returns,
       events,
+      retireYears,
+      scaleEventsWithInflation,
     };
     return runSimulation(input);
-  }, [balance, salary, expenses, years, inflation, salaryGrowth, returns, events]);
+  }, [balance, salary, expenses, years, inflation, salaryGrowth, returns, events, retireYears, scaleEventsWithInflation]);
 
   const insights = useMemo(() => generateInsights(data), [data]);
 

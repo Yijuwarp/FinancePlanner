@@ -1,3 +1,4 @@
+import { useMemo, memo } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Legend,
@@ -10,9 +11,10 @@ interface ChartViewProps {
   data: MonthData[];
   events: LifeEvent[];
   highlightedEventId?: string | null;
+  filterLevel: 'all' | 'medium' | 'high';
 }
 
-function EventStartLabel(props: any) {
+const EventStartLabel = memo((props: any) => {
   const { viewBox, emojis = [] } = props;
   if (!viewBox || !emojis.length) return null;
   return (
@@ -31,7 +33,7 @@ function EventStartLabel(props: any) {
       ))}
     </g>
   );
-}
+});
 
 function formatEventImpact(ae: ActiveEventInfo): string {
   if (ae.type === 'job_loss') return 'No salary';
@@ -42,7 +44,7 @@ function formatEventImpact(ae: ActiveEventInfo): string {
   return parts.join(' + ') || '—';
 }
 
-function CustomTooltip({ active, payload }: any) {
+const CustomTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as MonthData;
   if (!d) return null;
@@ -91,52 +93,80 @@ function CustomTooltip({ active, payload }: any) {
         <>
           <div className="tooltip-divider" />
           <div className="tooltip-events-header">🔥 Active Events</div>
-          {d.activeEvents.map((ae, i) => (
-            <div key={i} className="tooltip-event-row">
-              <span className="tooltip-event-label">{ae.label}</span>
-              <span className={`tooltip-event-impact ${ae.type === 'job_loss' ? 'tooltip-impact-jobloss' : ''}`}>
-                {formatEventImpact(ae)}
-              </span>
-            </div>
+          {[...d.activeEvents]
+            .sort((a, b) => (b.oneTimeImpact + b.recurringImpact) - (a.oneTimeImpact + a.recurringImpact))
+            .map((ae, i) => (
+              <div key={i} className="tooltip-event-row">
+                <span className="tooltip-event-label">{ae.label}</span>
+                {ae.impactLevel && (
+                  <span className={`impact-badge impact-badge-${ae.impactLevel}`}>
+                    {ae.impactLevel === 'high' ? 'High' : ae.impactLevel === 'medium' ? 'Med' : 'Low'}
+                  </span>
+                )}
+                <span className={`tooltip-event-impact ${ae.type === 'job_loss' ? 'tooltip-impact-jobloss' : ''}`}>
+                  {formatEventImpact(ae)}
+                </span>
+              </div>
           ))}
         </>
       )}
     </div>
   );
-}
+};
 
-export default function ChartView({ data, events }: ChartViewProps) {
+const ChartView = memo(({ data, events, filterLevel }: ChartViewProps) => {
   const hasEvents = events.length > 0;
 
-  // Group event starts by month and calculate vertical offsets
-  const startsByMonth = new Map<string, { emoji: string; yOffset: number }[]>();
-  const sortedEvents = [...events].sort((a, b) => a.date.localeCompare(b.date));
-  
-  let lastMonthIndex = -10;
-  let currentStackBase = 0;
+  // Derive event starts from data to include repeats
+  const startsByMonth = useMemo(() => {
+    const map = new Map<string, { emoji: string; yOffset: number }[]>();
+    let lastStartedMonthIdx = -10;
+    let currentStackBase = 0;
 
-  for (const event of sortedEvents) {
-    const dp = data.find(d => d.dateKey === event.date);
-    if (!dp) continue;
+    for (const dp of data) {
+      // Filter starters based on impact level and recurrence
+      const starters = dp.activeEvents.filter(ae => {
+        if (!ae.isStart) return false;
+        
+        // Hide repeat markers ONLY if they are low impact AND not in "All" mode
+        // High/Medium repeats are always shown if they meet the impact threshold
+        if (ae.isRepeat && ae.impactLevel === 'low' && filterLevel !== 'all') return false;
 
-    const monthIdx = dp.monthIndex;
-    
-    // If events are within 3 months, stack them higher to avoid horizontal collision
-    if (monthIdx - lastMonthIndex < 3) {
-      currentStackBase++;
-    } else {
-      currentStackBase = 0;
+        if (filterLevel === 'high') {
+          return ae.impactLevel === 'high';
+        }
+        if (filterLevel === 'medium') {
+          return ae.impactLevel === 'high' || ae.impactLevel === 'medium';
+        }
+        return true;
+      });
+
+      if (starters.length === 0) continue;
+
+      const monthIdx = dp.monthIndex;
+      if (monthIdx - lastStartedMonthIdx < 3) {
+        currentStackBase++;
+      } else {
+        currentStackBase = 0;
+      }
+      lastStartedMonthIdx = monthIdx;
+
+      const existing: { emoji: string; yOffset: number }[] = [];
+      starters.forEach((ae, i) => {
+        existing.push({ 
+          emoji: ae.emoji || '📍', 
+          yOffset: (currentStackBase * 25) + (i * 25) 
+        });
+      });
+      map.set(dp.label, existing);
     }
-    lastMonthIndex = monthIdx;
+    return map;
+  }, [data, filterLevel]);
 
-    const existing = startsByMonth.get(dp.label) || [];
-    // If multiple events in SAME month, they also stack
-    const localOffset = existing.length * 25;
-    existing.push({ emoji: event.emoji, yOffset: (currentStackBase * 25) + localOffset });
-    startsByMonth.set(dp.label, existing);
-  }
-
-  const tickInterval = Math.max(1, Math.floor(data.length / 12)) - 1;
+  const tickInterval = useMemo(() => 
+    Math.max(1, Math.floor(data.length / 12)) - 1, 
+    [data.length]
+  );
 
   return (
     <div className="chart-view">
@@ -232,4 +262,7 @@ export default function ChartView({ data, events }: ChartViewProps) {
       </div>
     </div>
   );
-}
+});
+
+export default ChartView;
+

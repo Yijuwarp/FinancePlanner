@@ -1,10 +1,11 @@
+import { memo } from 'react';
 import type { Insight } from '../utils/simulation';
 
 interface InsightsProps {
   insights: Insight[];
 }
 
-export default function Insights({ insights }: InsightsProps) {
+const Insights = memo(({ insights }: InsightsProps) => {
   if (insights.length === 0) return null;
 
   return (
@@ -27,4 +28,7 @@ export default function Insights({ insights }: InsightsProps) {
       </div>
     </div>
   );
-}
+});
+
+export default Insights;
+

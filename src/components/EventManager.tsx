@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import type { LifeEvent } from '../utils/eventTemplates';
 import { EVENT_TEMPLATES, reCalculateEndDate } from '../utils/eventTemplates';
+import CurrencyInput from './CurrencyInput';
+import DurationInput from './DurationInput';
+import type { DurationUnit } from './DurationInput';
 
 interface EventManagerProps {
   events: LifeEvent[];
@@ -11,22 +14,31 @@ interface EventManagerProps {
   onHighlightEvent: (id: string | null) => void;
 }
 
-export default function EventManager({
+const EventManager = memo(({
   events,
   onAddEvent,
   onUpdateEvent,
   onRemoveEvent,
   highlightedEventId,
   onHighlightEvent,
-}: EventManagerProps) {
+}: EventManagerProps) => {
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  
+
   // Form state
   const [eventDate, setEventDate] = useState('');
   const [amount, setAmount] = useState<number>(0);
   const [monthlyImpact, setMonthlyImpact] = useState<number>(0);
-  const [durationMonths, setDurationMonths] = useState<number>(0);
+  const [durationMonths, setDurationMonths] = useState(24);
+  const [durationUnit, setDurationUnit] = useState<'years' | 'months'>('years');
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatInterval, setRepeatInterval] = useState(1);
+  const [repeatUnit, setRepeatUnit] = useState<'years' | 'months'>('years');
+
+  // Unified setter to prevent unit switch feedback cycles
+  const handleDurationUnitChange = (newUnit: DurationUnit) => {
+    setDurationUnit(newUnit);
+  };
 
   // Initialize for new event
   useEffect(() => {
@@ -41,7 +53,11 @@ export default function EventManager({
       setEventDate(`${y}-${String(m).padStart(2, '0')}`);
       setAmount(template.defaultAmount || 0);
       setMonthlyImpact(template.defaultMonthlyImpact || 0);
-      setDurationMonths(template.defaultDurationMonths || 0);
+      setDurationMonths(template.defaultDurationMonths || 24);
+      setDurationUnit(template.defaultDurationMonths && template.defaultDurationMonths >= 12 && template.defaultDurationMonths % 12 === 0 ? 'years' : 'months');
+      setRepeatEnabled(false);
+      setRepeatInterval(1);
+      setRepeatUnit('years');
     }
   }, [selectedTemplateKey, editingEventId]);
 
@@ -53,7 +69,11 @@ export default function EventManager({
         setEventDate(event.date);
         setAmount(event.amount || 0);
         setMonthlyImpact(event.monthlyImpact || 0);
-        setDurationMonths(event.durationMonths || 0);
+        setDurationMonths(event.durationMonths || 24);
+        setRepeatEnabled(event.repeatEnabled || false);
+        setRepeatInterval(event.repeatInterval || 1);
+        setRepeatUnit(event.repeatUnit || 'years');
+        setDurationUnit(event.durationMonths && event.durationMonths % 12 === 0 ? 'years' : 'months');
         
         // Find matching template key for UI
         const templateKey = Object.keys(EVENT_TEMPLATES).find(key => 
@@ -75,6 +95,9 @@ export default function EventManager({
           monthlyImpact,
           durationMonths: durationMonths > 0 ? durationMonths : undefined,
           endDate: durationMonths > 0 ? reCalculateEndDate(eventDate, durationMonths) : undefined,
+          repeatEnabled,
+          repeatInterval: repeatEnabled ? repeatInterval : undefined,
+          repeatUnit: repeatEnabled ? repeatUnit : undefined,
         };
         onUpdateEvent(updatedEvent);
         setEditingEventId(null);
@@ -92,6 +115,9 @@ export default function EventManager({
         monthlyImpact,
         durationMonths: durationMonths > 0 ? durationMonths : undefined,
         endDate: durationMonths > 0 ? reCalculateEndDate(eventDate, durationMonths) : undefined,
+        repeatEnabled,
+        repeatInterval: repeatEnabled ? repeatInterval : undefined,
+        repeatUnit: repeatEnabled ? repeatUnit : undefined,
       };
       onAddEvent(newEvent);
       setSelectedTemplateKey(null);
@@ -101,6 +127,12 @@ export default function EventManager({
   const handleCancel = () => {
     setEditingEventId(null);
     setSelectedTemplateKey(null);
+    setAmount(0);
+    setMonthlyImpact(0);
+    setDurationMonths(24);
+    setRepeatEnabled(false);
+    setRepeatInterval(1);
+    onHighlightEvent(null);
   };
 
   const activeTemplate = selectedTemplateKey ? EVENT_TEMPLATES[selectedTemplateKey] : null;
@@ -156,56 +188,93 @@ export default function EventManager({
               </div>
               
               {(activeTemplate?.type === 'one_time' || activeTemplate?.type === 'duration') && (
-                <div className="input-field-group">
-                  <label className="input-label" htmlFor="event-amount">💰 One-time Cost</label>
-                  <div className="input-wrapper">
-                    <span className="input-prefix">₹</span>
-                    <input
-                      id="event-amount"
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(Number(e.target.value))}
-                      className="currency-input"
-                    />
-                  </div>
-                </div>
+                <CurrencyInput
+                  id="event-amount"
+                  label="💰 One-time Cost"
+                  value={amount}
+                  onChange={setAmount}
+                  className="config-input-shared"
+                />
               )}
             </div>
 
             <div className="config-row">
               {activeTemplate?.type === 'duration' && (
-                <div className="input-field-group">
-                  <label className="input-label" htmlFor="event-monthly">📉 Monthly Impact</label>
-                  <div className="input-wrapper">
-                    <span className="input-prefix">₹</span>
-                    <input
-                      id="event-monthly"
-                      type="number"
-                      value={monthlyImpact}
-                      onChange={(e) => setMonthlyImpact(Number(e.target.value))}
-                      className="currency-input"
-                    />
-                  </div>
-                </div>
+                <CurrencyInput
+                  id="event-monthly"
+                  label={durationUnit === 'years' ? '📉 Yearly Impact' : '📉 Monthly Impact'}
+                  value={durationUnit === 'years' ? monthlyImpact * 12 : monthlyImpact}
+                  onChange={(v) => {
+                    // Update internal monthlyImpact based on current toggle unit
+                    setMonthlyImpact(durationUnit === 'years' ? v / 12 : v);
+                  }}
+                  className="config-input-shared"
+                />
               )}
 
               {(activeTemplate?.type === 'duration' || activeTemplate?.type === 'job_loss') && (
-                <div className="input-field-group">
-                  <label className="input-label" htmlFor="event-duration">⏳ Duration (Months)</label>
-                  <input
-                    id="event-duration"
-                    type="number"
-                    value={durationMonths}
-                    onChange={(e) => setDurationMonths(Number(e.target.value))}
-                    className="currency-input border border-slate-700/50 rounded p-2"
-                  />
+                <DurationInput
+                  id="event-duration"
+                  label="⏳ Duration"
+                  value={durationMonths}
+                  onChange={setDurationMonths}
+                  unit={durationUnit}
+                  onUnitChange={handleDurationUnitChange}
+                  className="config-input-shared"
+                />
+              )}
+            </div>
+
+            <div className="config-row repeat-config">
+              <div className="setting-toggle-row">
+                <label className="toggle-label" htmlFor="repeat-toggle">
+                  🔄 Repeat Every
+                </label>
+                <button
+                  id="repeat-toggle"
+                  className={`toggle-switch ${repeatEnabled ? 'active' : ''}`}
+                  onClick={() => setRepeatEnabled(!repeatEnabled)}
+                >
+                  <div className="toggle-knob" />
+                </button>
+              </div>
+
+              {repeatEnabled && (
+                <div className="repeat-inputs fade-slide-down">
+                  <div className="repeat-interval-input">
+                    <input
+                      type="number"
+                      value={repeatInterval}
+                      onChange={(e) => setRepeatInterval(parseInt(e.target.value) || 1)}
+                      className="currency-input no-spin"
+                    />
+                  </div>
+                  <div className="repeat-unit-toggle">
+                    <button
+                      className={`unit-btn ${repeatUnit === 'years' ? 'active' : ''}`}
+                      onClick={() => setRepeatUnit('years')}
+                    >
+                      Years
+                    </button>
+                    <button
+                      className={`unit-btn ${repeatUnit === 'months' ? 'active' : ''}`}
+                      onClick={() => setRepeatUnit('months')}
+                    >
+                      Months
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
           <div className="event-config-actions">
-            <button className="add-event-btn" onClick={handleSave}>
+            <button 
+              className="add-event-btn" 
+              onClick={handleSave}
+              disabled={!eventDate}
+              title={!eventDate ? 'Please select a date' : ''}
+            >
               {editingEventId ? 'Save Changes' : '+ Add Event'}
             </button>
             {editingEventId && (
@@ -253,7 +322,9 @@ export default function EventManager({
       )}
     </div>
   );
-}
+});
+
+export default EventManager;
 
 function formatEventDate(dateKey: string): string {
   if (!dateKey) return '';
