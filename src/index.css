@@ -61,6 +61,13 @@ body {
 /* ========================================
    APP LAYOUT
    ======================================== */
+.chart-view.chart-lagging {
+  opacity: 0.6;
+  pointer-events: none;
+  filter: grayscale(0.2) saturate(0.8);
+  transition: opacity 0.15s ease;
+}
+
 .app {
   position: relative;
   min-height: 100vh;

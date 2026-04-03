@@ -1,6 +1,10 @@
 import type { LifeEvent } from './eventTemplates';
 import { formatINRShort } from './formatINR';
+import { dateKeyToIndex, formatChartLabel } from './dateUtils';
 
+/**
+ * Input parameters for the financial simulation.
+ */
 export interface SimulationInput {
   balance: number;
   salary: number;
@@ -14,6 +18,9 @@ export interface SimulationInput {
   scaleEventsWithInflation: boolean;
 }
 
+/**
+ * Information about an active financial event in a specific month.
+ */
 export interface ActiveEventInfo {
   id: string;
   label: string;
@@ -26,6 +33,9 @@ export interface ActiveEventInfo {
   impactLevel?: 'low' | 'medium' | 'high';
 }
 
+/**
+ * Data point for a single month in the simulation.
+ */
 export interface MonthData {
   monthIndex: number;
   label: string;
@@ -37,16 +47,14 @@ export interface MonthData {
   activeEvents: ActiveEventInfo[];
 }
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function dateKeyToIndex(dateKey: string, startYear: number, startMonth: number): number {
-  if (!dateKey || !dateKey.includes('-')) return -1;
-  const [y, m] = dateKey.split('-').map(Number);
-  if (isNaN(y) || isNaN(m)) return -1;
-  return (y - startYear) * 12 + (m - startMonth);
-}
-
+/**
+ * Categorizes an event's financial impact relative to current salary.
+ * 
+ * @param oneTime - One-time cost of the event.
+ * @param recurring - Monthly recurring cost of the event.
+ * @param salary - User's current monthly salary for scale.
+ * @returns 'low', 'medium', or 'high'.
+ */
 function calculateImpact(oneTime: number, recurring: number, salary: number): 'low' | 'medium' | 'high' {
   const s = Math.max(salary, 1); // Avoid division by zero
   if (oneTime > s || recurring > s * 0.33) return 'high';
@@ -54,6 +62,110 @@ function calculateImpact(oneTime: number, recurring: number, salary: number): 'l
   return 'low';
 }
 
+/**
+ * Pre-calculates all event impacts for each month to optimize the main simulation loop.
+ * 
+ * @param input - Simulation inputs containing events and configuration.
+ * @param totalMonths - Total number of months to project.
+ * @param startYear - Simulation start year.
+ * @param startMonth - Simulation start month (1-12).
+ * @param monthlyInflation - Calculated monthly inflation rate.
+ * @param getSalaryAt - Helper function to get salary at a specific month index.
+ * @returns A Map matching month index to an array of active events for that month.
+ */
+function preprocessEvents(
+  input: SimulationInput,
+  totalMonths: number,
+  startYear: number,
+  startMonth: number,
+  monthlyInflation: number,
+  getSalaryAt: (idx: number) => number
+): Map<number, ActiveEventInfo[]> {
+  const monthlyImpacts = new Map<number, ActiveEventInfo[]>();
+
+  const addEventToMonth = (idx: number, info: ActiveEventInfo) => {
+    if (idx < 0 || idx >= totalMonths) return;
+    const existing = monthlyImpacts.get(idx) || [];
+    existing.push(info);
+    monthlyImpacts.set(idx, existing);
+  };
+
+  const getMultiplier = (idx: number) => {
+    return input.scaleEventsWithInflation ? Math.pow(1 + monthlyInflation, idx) : 1;
+  };
+
+  for (const event of input.events) {
+    const eventIdx = dateKeyToIndex(event.date, startYear, startMonth);
+    if (eventIdx === -1) continue;
+
+    const processInstance = (idx: number, isRepeat: boolean) => {
+      const mult = getMultiplier(idx);
+      const oneTimeAmt = (event.amount || 0) * mult;
+      const monthlyAmt = (event.monthlyImpact || 0) * mult;
+      const salary = getSalaryAt(idx);
+      const impactLevel = calculateImpact(oneTimeAmt, monthlyAmt, salary);
+
+      if (event.type === 'one_time') {
+        addEventToMonth(idx, {
+          id: isRepeat ? `${event.id}-rep-${idx}` : event.id,
+          label: event.label,
+          emoji: event.emoji,
+          type: 'one_time',
+          oneTimeImpact: oneTimeAmt,
+          recurringImpact: 0,
+          isStart: true,
+          isRepeat,
+          impactLevel
+        });
+      } else {
+        // Duration or Job Loss
+        const endIdx = event.endDate
+          ? dateKeyToIndex(event.endDate, startYear, startMonth)
+          : idx + (event.durationMonths || 24) - 1;
+        
+        if (endIdx < idx) return;
+
+        for (let i = idx; i <= Math.min(endIdx, totalMonths - 1); i++) {
+          const isStart = i === idx;
+          addEventToMonth(i, {
+            id: isRepeat ? `${event.id}-rep-${idx}` : event.id,
+            label: event.label,
+            emoji: event.emoji,
+            type: event.type,
+            oneTimeImpact: isStart ? oneTimeAmt : 0,
+            recurringImpact: monthlyAmt,
+            isStart,
+            isRepeat,
+            impactLevel
+          });
+        }
+      }
+    };
+
+    // Process initial instance
+    processInstance(eventIdx, false);
+
+    // Process repeats
+    if (event.repeatEnabled && event.repeatInterval && event.repeatInterval > 0) {
+      const intervalMonths = event.repeatUnit === 'months' ? event.repeatInterval : event.repeatInterval * 12;
+      let nextIdx = eventIdx + intervalMonths;
+      while (nextIdx < totalMonths) {
+        processInstance(nextIdx, true);
+        nextIdx += intervalMonths;
+      }
+    }
+  }
+
+  return monthlyImpacts;
+}
+
+/**
+ * Runs the financial simulation based on user inputs.
+ * Uses pre-calculated event impacts and growth multipliers for performance.
+ * 
+ * @param input - All simulation parameters.
+ * @returns Array of data points for each month in the projection.
+ */
 export function runSimulation(input: SimulationInput): MonthData[] {
   const totalMonths = input.years * 12;
   const now = new Date();
@@ -65,207 +177,52 @@ export function runSimulation(input: SimulationInput): MonthData[] {
   const monthlyReturns = Math.pow(1 + input.returns / 100, 1 / 12) - 1;
   const retireInMonths = input.retireYears * 12;
 
-  // Track salary for impact calculation reference
-  const getSalaryAt = (idx: number) => {
-    const monthsOfGrowth = Math.min(idx, retireInMonths - 1);
-    const s = input.salary * Math.pow(1 + monthlySalaryGrowth, Math.max(0, monthsOfGrowth));
-    return Math.max(s, 1);
-  };
-
-  // Pre-process events
-  const oneTimeEvents = new Map<number, { 
-    id: string; amount: number; label: string; emoji: string; isRepeat: boolean; impactLevel: 'low' | 'medium' | 'high' 
-  }[]>();
-  
-  const addOneTime = (idx: number, eventData: { id: string; amount: number; label: string; emoji: string; isRepeat: boolean; impactLevel: 'low' | 'medium' | 'high' }) => {
-    const existing = oneTimeEvents.get(idx) || [];
-    existing.push(eventData);
-    oneTimeEvents.set(idx, existing);
-  };
-
-  const durationEvents: {
-    id: string; startIdx: number; endIdx: number;
-    monthlyImpact: number; label: string; emoji: string; oneTimeAmount: number;
-    type: 'duration' | 'job_loss'; isRepeat: boolean; impactLevel: 'low' | 'medium' | 'high';
-  }[] = [];
-
-  for (const event of input.events) {
-    const eventIdx = dateKeyToIndex(event.date, startYear, startMonth);
-    if (eventIdx === -1) continue;
-
-    const getMultiplier = (idx: number) => {
-      if (isNaN(idx) || idx < 0) return 1;
-      return input.scaleEventsWithInflation ? Math.pow(1 + monthlyInflation, idx) : 1;
-    };
-
-    if (event.type === 'one_time') {
-      if (eventIdx >= 0 && eventIdx < totalMonths) {
-        const amt = (event.amount || 0) * getMultiplier(eventIdx);
-        addOneTime(eventIdx, { 
-          id: event.id, 
-          amount: amt, 
-          label: event.label,
-          emoji: event.emoji,
-          isRepeat: false,
-          impactLevel: calculateImpact(amt, 0, getSalaryAt(eventIdx))
-        });
-      }
-
-      // Handle repeats
-      if (event.repeatEnabled && event.repeatInterval && event.repeatInterval > 0) {
-        const intervalMonths = event.repeatUnit === 'months' ? event.repeatInterval : event.repeatInterval * 12;
-        if (intervalMonths > 0) {
-          let nextIdx = eventIdx + intervalMonths;
-          while (nextIdx < totalMonths) {
-            if (nextIdx >= 0) {
-              const amt = (event.amount || 0) * getMultiplier(nextIdx);
-              addOneTime(nextIdx, { 
-                id: `${event.id}-rep-${nextIdx}`, 
-                amount: amt, 
-                label: event.label,
-                emoji: event.emoji,
-                isRepeat: true,
-                impactLevel: calculateImpact(amt, 0, getSalaryAt(nextIdx))
-              });
-            }
-            nextIdx += intervalMonths;
-          }
-        }
-      }
-    } else if (event.type === 'duration') {
-      const endIdx = event.endDate
-        ? dateKeyToIndex(event.endDate, startYear, startMonth)
-        : eventIdx + (event.durationMonths || 24) - 1;
-      
-      if (endIdx === -1 || isNaN(endIdx)) continue;
-      
-      const durationLength = endIdx - eventIdx;
-      const initialAmt = (event.amount || 0) * getMultiplier(eventIdx);
-      const initialMonthly = (event.monthlyImpact || 0) * getMultiplier(eventIdx);
-
-      durationEvents.push({
-        id: event.id, startIdx: eventIdx, endIdx,
-        monthlyImpact: initialMonthly, 
-        label: event.label,
-        emoji: event.emoji,
-        oneTimeAmount: initialAmt, 
-        type: 'duration',
-        isRepeat: false,
-        impactLevel: calculateImpact(initialAmt, initialMonthly, getSalaryAt(eventIdx))
-      });
-
-      // Handle repeats
-      if (event.repeatEnabled && event.repeatInterval && event.repeatInterval > 0) {
-        const intervalMonths = event.repeatUnit === 'months' ? event.repeatInterval : event.repeatInterval * 12;
-        if (intervalMonths > 0) {
-          let nextIdx = eventIdx + intervalMonths;
-          while (nextIdx < totalMonths) {
-            if (nextIdx >= 0) {
-              const m = getMultiplier(nextIdx);
-              const amt = (event.amount || 0) * m;
-              const monthly = (event.monthlyImpact || 0) * m;
-              durationEvents.push({
-                id: `${event.id}-rep-${nextIdx}`, 
-                startIdx: nextIdx, 
-                endIdx: nextIdx + durationLength,
-                monthlyImpact: monthly, 
-                label: event.label,
-                emoji: event.emoji,
-                oneTimeAmount: amt, 
-                type: 'duration',
-                isRepeat: true,
-                impactLevel: calculateImpact(amt, monthly, getSalaryAt(nextIdx))
-              });
-            }
-            nextIdx += intervalMonths;
-          }
-        }
-      }
-    } else if (event.type === 'job_loss') {
-      const endIdx = event.endDate
-        ? dateKeyToIndex(event.endDate, startYear, startMonth)
-        : eventIdx + (event.durationMonths || 6) - 1;
-      
-      const m = getMultiplier(eventIdx);
-      const amt = (event.amount || 0) * m;
-      const monthly = (event.monthlyImpact || 0) * m;
-      durationEvents.push({
-        id: event.id, startIdx: eventIdx, endIdx,
-        monthlyImpact: monthly, 
-        label: event.label,
-        emoji: event.emoji,
-        oneTimeAmount: amt, 
-        type: 'job_loss',
-        isRepeat: false,
-        impactLevel: calculateImpact(amt, monthly, getSalaryAt(eventIdx))
-      });
-    }
+  // Caching salary growth multipliers
+  const salaryMultipliers = new Float64Array(totalMonths);
+  for (let i = 0; i < totalMonths; i++) {
+    const monthsOfGrowth = Math.min(i, retireInMonths - 1);
+    salaryMultipliers[i] = Math.pow(1 + monthlySalaryGrowth, Math.max(0, monthsOfGrowth));
   }
+
+  const getSalaryAt = (idx: number) => {
+    return Math.max(input.salary * salaryMultipliers[idx], 1);
+  };
+
+  // Pre-process all events into a lookup table
+  const monthlyEventImpactMap = preprocessEvents(
+    input, totalMonths, startYear, startMonth, monthlyInflation, getSalaryAt
+  );
 
   const results: MonthData[] = [];
   let balance = input.balance;
   let baselineBalance = input.balance;
-  let currentSalary = input.salary;
-  let currentExpenses = input.expenses;
+  
+  // Caching inflation for core expenses
+  const inflationMultipliers = new Float64Array(totalMonths);
+  for (let i = 0; i < totalMonths; i++) {
+    inflationMultipliers[i] = Math.pow(1 + monthlyInflation, i);
+  }
 
   for (let i = 0; i < totalMonths; i++) {
     const isRetired = i >= retireInMonths;
     const currentMonth = ((startMonth - 1 + i) % 12) + 1;
     const currentYear = startYear + Math.floor((startMonth - 1 + i) / 12);
-    const yearShort = currentYear % 100;
-    const label = `${MONTH_NAMES[currentMonth - 1]} '${yearShort.toString().padStart(2, '0')}`;
+    const label = formatChartLabel(currentYear, currentMonth);
     const dateKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
-    if (i > 0) {
-      if (!isRetired) currentSalary *= (1 + monthlySalaryGrowth);
-      currentExpenses *= (1 + monthlyInflation);
-    }
+    const currentSalary = isRetired ? 0 : getSalaryAt(i);
+    const currentExpenses = input.expenses * inflationMultipliers[i];
 
-    // Baseline calculation
+    // 1. Baseline calculation (no events)
     if (!isRetired) baselineBalance += currentSalary;
     baselineBalance -= currentExpenses;
     if (baselineBalance > 0) baselineBalance *= (1 + monthlyReturns);
 
-    // Build active events for this month
-    const activeEvents: ActiveEventInfo[] = [];
-    let jobLossActive = false;
+    // 2. Active events and current balance calculation
+    const activeEvents = monthlyEventImpactMap.get(i) || [];
+    const jobLossActive = activeEvents.some(ae => ae.type === 'job_loss');
 
-    for (const de of durationEvents) {
-      if (i >= de.startIdx && i <= de.endIdx) {
-        const isStart = i === de.startIdx;
-        
-        if (de.type === 'job_loss') {
-          jobLossActive = true;
-          activeEvents.push({
-            id: de.id, label: de.label, emoji: de.emoji, type: 'job_loss',
-            oneTimeImpact: isStart ? de.oneTimeAmount : 0,
-            recurringImpact: de.monthlyImpact, isStart,
-            isRepeat: de.isRepeat, impactLevel: de.impactLevel
-          });
-        } else {
-          activeEvents.push({
-            id: de.id, label: de.label, emoji: de.emoji, type: 'duration',
-            oneTimeImpact: isStart ? de.oneTimeAmount : 0,
-            recurringImpact: de.monthlyImpact, isStart,
-            isRepeat: de.isRepeat, impactLevel: de.impactLevel
-          });
-        }
-      }
-    }
-
-    const oneTimeHits = oneTimeEvents.get(i);
-    if (oneTimeHits) {
-      for (const hit of oneTimeHits) {
-        activeEvents.push({
-          id: hit.id, label: hit.label, emoji: hit.emoji, type: 'one_time',
-          oneTimeImpact: hit.amount, recurringImpact: 0, 
-          isStart: true, isRepeat: hit.isRepeat,
-          impactLevel: hit.impactLevel
-        });
-      }
-    }
-
-    // Apply financial impacts
+    // Apply income/expense for simulation balance
     if (!jobLossActive && !isRetired) balance += currentSalary;
     balance -= currentExpenses;
 
@@ -277,24 +234,35 @@ export function runSimulation(input: SimulationInput): MonthData[] {
     if (balance > 0) balance *= (1 + monthlyReturns);
 
     results.push({
-      monthIndex: i, label, dateKey,
+      monthIndex: i,
+      label,
+      dateKey,
       balance: Math.round(balance),
       baselineBalance: Math.round(baselineBalance),
-      salary: isRetired ? 0 : Math.round(currentSalary),
+      salary: Math.round(currentSalary),
       expenses: Math.round(currentExpenses),
-      activeEvents,
+      activeEvents: [...activeEvents],
     });
   }
 
   return results;
 }
 
+/**
+ * A simple insight message.
+ */
 export interface Insight {
   type: 'danger' | 'warning' | 'info' | 'success';
   icon: string;
   message: string;
 }
 
+/**
+ * Generates automated financial insights based on the simulation results.
+ * 
+ * @param data - The output from runSimulation.
+ * @returns Array of insights related to solvency, cost of events, and lowest balances.
+ */
 export function generateInsights(data: MonthData[]): Insight[] {
   const insights: Insight[] = [];
   if (data.length === 0) return insights;
@@ -315,6 +283,7 @@ export function generateInsights(data: MonthData[]): Insight[] {
       lowestMonth = d;
     }
   }
+  
   insights.push({
     type: lowestBalance < 0 ? 'danger' : 'warning', icon: '📉',
     message: `Lowest balance: ₹${formatINRShort(Math.abs(lowestBalance))} ${lowestBalance < 0 ? '(deficit)' : ''} in ${lowestMonth.label}`,

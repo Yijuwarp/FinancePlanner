@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 
+/** Possible units for duration input. */
 export type DurationUnit = 'months' | 'years';
 
 interface DurationInputProps {
   id: string;
   label: string;
-  value: number; // always internally in months
+  value: number; // Internally always stored in months
   onChange: (v: number) => void;
   unit?: DurationUnit;
   onUnitChange?: (u: DurationUnit) => void;
@@ -13,6 +14,10 @@ interface DurationInputProps {
   className?: string;
 }
 
+/**
+ * A specialized input for handling durations with a month/year toggle.
+ * Converts between months and years while maintaining the internal value in months.
+ */
 export default function DurationInput({
   id,
   label,
@@ -34,7 +39,7 @@ export default function DurationInput({
     unit === 'years' ? (value / 12).toString() : value.toString()
   );
 
-  // Sync when internal value changes (unless we are typing)
+  // Sync internal display value when external month-count changes (e.g., from template)
   useEffect(() => {
     const newVal = unit === 'years' ? (value / 12).toString() : value.toString();
     if (parseFloat(displayValue) !== parseFloat(newVal)) {
@@ -54,7 +59,8 @@ export default function DurationInput({
   const toggleUnit = (newUnit: DurationUnit) => {
     if (newUnit === unit) return;
     setUnit(newUnit);
-    // Convert current displayValue for smooth transition
+    
+    // Smoothly convert the currently displayed value for better UX
     const num = parseFloat(displayValue);
     if (!isNaN(num)) {
       const converted = newUnit === 'years' ? (num / 12).toFixed(1) : (num * 12).toString();
@@ -77,7 +83,7 @@ export default function DurationInput({
             onChange={handleChange}
             step={unit === 'years' ? 0.1 : 1}
             min={0}
-            className="currency-input" // sharing styles
+            className="currency-input" // shares styles with currency input
             placeholder="0"
           />
         </div>

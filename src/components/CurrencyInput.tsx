@@ -10,6 +10,11 @@ interface CurrencyInputProps {
   className?: string;
 }
 
+/**
+ * A specialized input for handling Indian Rupee (INR) values.
+ * Supports shorthand notation like "3L" for 3 Lakhs, "80K" for 80 Thousand.
+ * Automatically formats with Indian commas on focus.
+ */
 export default function CurrencyInput({
   id,
   label,
@@ -21,7 +26,7 @@ export default function CurrencyInput({
   const [focused, setFocused] = useState(false);
   const [displayValue, setDisplayValue] = useState('');
 
-  // Initial and external value sync
+  // Synchronize internal display state with external numeric value
   useEffect(() => {
     if (!focused) {
       // When blurred, show the beautiful shorthand (e.g., 3L, 80K)
@@ -55,7 +60,7 @@ export default function CurrencyInput({
 
     setDisplayValue(raw);
     
-    // Attempt real-time parse for immediate chart feedback
+    // Attempt real-time parse for immediate feedback (e.g., updating charts)
     const parsed = parseINR(raw);
     if (parsed !== null) {
       onChange(parsed);

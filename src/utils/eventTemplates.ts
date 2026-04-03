@@ -1,4 +1,7 @@
+import { addMonthsToDate } from './dateUtils';
+
 export interface LifeEvent {
+
   id: string;
   type: 'one_time' | 'duration' | 'job_loss';
   label: string;
@@ -131,29 +134,34 @@ export const EVENT_TEMPLATES: Record<string, EventTemplate> = {
   },
 };
 
+
 export function reCalculateEndDate(date: string, durationMonths: number): string {
-  if (!date || !date.includes('-')) return date;
-  const [year, month] = date.split('-').map(Number);
-  if (isNaN(year) || isNaN(month)) return date;
-  const endMonthTotal = month + durationMonths - 1;
-  const endYear = year + Math.floor((endMonthTotal - 1) / 12);
-  const endMonthNorm = ((endMonthTotal - 1) % 12) + 1;
-  return `${endYear}-${String(endMonthNorm).padStart(2, '0')}`;
+  return addMonthsToDate(date, durationMonths);
 }
 
+/**
+ * Creates a LifeEvent instance from a template key and a start date.
+ * 
+ * @param templateKey - Key of the template in EVENT_TEMPLATES.
+ * @param date - Start date in 'YYYY-MM' format.
+ * @returns A new LifeEvent object with default values from the template.
+ */
 export function createEventFromTemplate(
   templateKey: string,
   date: string
 ): LifeEvent {
   const template = EVENT_TEMPLATES[templateKey];
+  if (!template) throw new Error(`Template not found: ${templateKey}`);
+  
   const id = `${templateKey}-${Date.now()}`;
   const durationMonths = template.defaultDurationMonths || 0;
-  const endDate = durationMonths > 0 ? reCalculateEndDate(date, durationMonths) : undefined;
+  const endDate = durationMonths > 0 ? addMonthsToDate(date, durationMonths) : undefined;
 
   let repeatEnabled = false;
   let repeatInterval = 1;
   let repeatUnit: 'years' | 'months' = 'years';
 
+  // Smart defaults for certain event types
   if (templateKey === 'domestic_trip' || templateKey === 'intl_trip') {
     repeatEnabled = true;
     repeatInterval = 1;
@@ -180,3 +188,4 @@ export function createEventFromTemplate(
     repeatUnit,
   };
 }
+

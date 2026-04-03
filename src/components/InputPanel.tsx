@@ -1,6 +1,9 @@
 import { useState, memo } from 'react';
 import CurrencyInput from './CurrencyInput';
 
+/**
+ * Props for the InputPanel component.
+ */
 interface InputPanelProps {
   balance: number;
   salary: number;
@@ -22,6 +25,9 @@ interface InputPanelProps {
   onScaleEventsWithInflationChange: (v: boolean) => void;
 }
 
+/**
+ * Internal slider input component for the InputPanel.
+ */
 function SliderInput({
   label,
   value,
@@ -67,6 +73,10 @@ function SliderInput({
   );
 }
 
+/**
+ * Panel containing all financial inputs (salary, expenses, savings, etc.).
+ * Includes an "Advanced Settings" section for inflation and growth rates.
+ */
 const InputPanel = memo((props: InputPanelProps) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -199,4 +209,3 @@ const InputPanel = memo((props: InputPanelProps) => {
 });
 
 export default InputPanel;
-
