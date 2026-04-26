@@ -38,8 +38,8 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [eventsCustomized, setEventsCustomized] = useState(false);
 
   const defaults = useMemo(
-    () => suggestOnboardingDefaults(age, job?.role || 'Other', location || 'Other'),
-    [age, job?.role, location],
+    () => suggestOnboardingDefaults(age, job?.role || 'Other', location || 'Other', job?.seniority || 'Individual Contributor'),
+    [age, job?.role, job?.seniority, location],
   );
 
   const suggestedEvents = useMemo(
