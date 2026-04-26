@@ -257,6 +257,11 @@ body {
   contain: layout style;
 }
 
+.chart-container .recharts-wrapper,
+.chart-container .recharts-surface {
+  overflow: visible;
+}
+
 /* Custom Tooltip */
 .chart-tooltip {
   background: rgba(15, 23, 42, 0.95);
