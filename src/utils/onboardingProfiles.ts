@@ -207,6 +207,8 @@ export const INDIAN_CITIES = [...TIER_1_CITIES, ...TIER_2_CITIES, 'Other'];
 
 export type CityTier = 1 | 2 | 3;
 
+type SeniorityLevel = (typeof SENIORITY_LEVELS)[number] | 'None';
+
 type JobCategory =
   | 'tech'
   | 'corporate'
@@ -246,14 +248,59 @@ const JOB_CATEGORY_MAP: Record<string, JobCategory> = {
   Other: 'corporate',
 };
 
-const SALARY_TABLE: Record<JobCategory, Record<CityTier, number>> = {
-  tech: { 1: 120000, 2: 70000, 3: 45000 },
-  corporate: { 1: 60000, 2: 45000, 3: 30000 },
-  government: { 1: 70000, 2: 55000, 3: 40000 },
-  service: { 1: 40000, 2: 30000, 3: 20000 },
-  self_employed: { 1: 80000, 2: 50000, 3: 35000 },
-  student: { 1: 0, 2: 0, 3: 0 },
-  homemaker: { 1: 0, 2: 0, 3: 0 },
+const TIER_MULTIPLIER: Record<CityTier, number> = {
+  1: 1.0,
+  2: 0.75,
+  3: 0.55,
+};
+
+const SENIORITY_MULTIPLIER: Record<SeniorityLevel, number> = {
+  None: 0,
+  Entry: 0.6,
+  'Individual Contributor': 1.0,
+  Senior: 1.5,
+  Manager: 2.2,
+  Director: 3.5,
+  'Vice President': 5.5,
+  CXO: 8.0,
+};
+
+function normalizeSeniority(value: string): SeniorityLevel {
+  if (value === 'None') return 'None';
+  if ((SENIORITY_LEVELS as readonly string[]).includes(value)) return value as SeniorityLevel;
+  return 'Individual Contributor';
+}
+
+const NON_EARNING_SET = new Set(['Student', 'Homemaker', 'Unemployed']);
+
+const BASE_ROLE_SALARY_TIER_1: Record<string, number> = {
+  'Software Engineer': 120000,
+  'Data Professional': 110000,
+  'IT / Systems Engineer': 70000,
+  'Product Manager': 140000,
+  'Designer (UI/UX)': 90000,
+  Operations: 60000,
+  Sales: 50000,
+  Marketing: 60000,
+  'Human Resources': 50000,
+  Finance: 70000,
+  Banking: 60000,
+  Insurance: 50000,
+  Government: 60000,
+  PSU: 80000,
+  'Teacher / Professor': 40000,
+  Doctor: 120000,
+  'Nurse / Healthcare': 30000,
+  'Business Owner': 80000,
+  'Retail / Shop Owner': 50000,
+  'Freelancer / Consultant': 70000,
+  Driver: 25000,
+  'Delivery / Gig': 20000,
+  Technician: 30000,
+  Student: 0,
+  Homemaker: 0,
+  Unemployed: 0,
+  Other: 60000,
 };
 
 const eventAliases: Record<string, string[]> = {
@@ -310,23 +357,36 @@ function buildEvent(templateKey: string, ageOffset: number, currentAge: number, 
   return base;
 }
 
-export function suggestOnboardingDefaults(age: number, job: string, location: string): OnboardingDefaults {
+export function suggestOnboardingDefaults(
+  age: number,
+  job: string,
+  location: string,
+  seniority: string = 'Individual Contributor',
+): OnboardingDefaults {
   const normalizedAge = Math.min(60, Math.max(18, age));
   const jobCategory = JOB_CATEGORY_MAP[job] || 'corporate';
   const tier = getTier(location);
 
-  const salary = SALARY_TABLE[jobCategory][tier];
+  const normalizedSeniority = normalizeSeniority(seniority);
+  const baseRoleSalary = BASE_ROLE_SALARY_TIER_1[job] ?? BASE_ROLE_SALARY_TIER_1.Other;
+  const rawSalary = NON_EARNING_SET.has(job)
+    ? 0
+    : baseRoleSalary * TIER_MULTIPLIER[tier] * (SENIORITY_MULTIPLIER[normalizedSeniority] ?? 1);
+
+  let salary = rawSalary;
+  if (salary > 0 && salary < 15000) salary = 15000;
+  if (salary > 1500000) salary = 1500000;
+  salary = Math.round(salary / 1000) * 1000;
 
   let baseRatio = ({ 1: 0.7, 2: 0.6, 3: 0.5 } as const)[tier];
-  if (jobCategory === 'government') baseRatio -= 0.05;
-  if (jobCategory === 'self_employed') baseRatio += 0.05;
+  if (['Manager', 'Director', 'Vice President', 'CXO'].includes(normalizedSeniority)) baseRatio -= 0.05;
+  if (['Driver', 'Delivery / Gig'].includes(job)) baseRatio += 0.05;
 
-  let expenses = Math.round(salary * baseRatio);
+  const expenses = Math.round((salary * baseRatio) / 1000) * 1000;
 
-  if (jobCategory === 'student') expenses = tier === 1 ? 15000 : tier === 2 ? 12000 : 10000;
-  if (jobCategory === 'homemaker') expenses = tier === 1 ? 40000 : tier === 2 ? 30000 : 20000;
-
-  const savings = normalizedAge < 25 ? salary * 2 : normalizedAge < 35 ? salary * 4 : salary * 8;
+  const savings = salary === 0
+    ? 10000
+    : normalizedAge < 25 ? salary * 2 : normalizedAge < 35 ? salary * 4 : salary * 8;
   const years = Math.max(10, 80 - (normalizedAge + 10));
   const retireYears = Math.max(1, 60 - normalizedAge);
 
