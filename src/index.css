@@ -981,6 +981,14 @@ body {
   box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
 }
 
+.add-event-btn:disabled {
+  background: rgba(100, 116, 139, 0.45);
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .cancel-event-btn {
   flex: 1;
   padding: 10px;
@@ -1494,6 +1502,33 @@ body {
   margin: 18px 0;
 }
 
+.onboarding-grid-single {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.onboarding-inline-input {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.72);
+  padding: 10px 12px;
+}
+
+.searchable-input {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.72);
+  padding: 10px 12px;
+  cursor: text;
+}
+
+.searchable-input:focus,
+.onboarding-inline-input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+
 .searchable-select {
   position: relative;
 }
@@ -1529,6 +1564,35 @@ body {
 .searchable-option-active {
   background: rgba(99, 102, 241, 0.18);
   color: var(--color-text);
+}
+
+.event-chips-horizontal {
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  padding-bottom: 6px;
+}
+
+.event-chip-remove {
+  border: none;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
+.event-chip-remove:hover {
+  opacity: 1;
+}
+
+.onboarding-footer-sticky {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.92));
+  padding-top: 10px;
 }
 
 @media (max-width: 820px) {
