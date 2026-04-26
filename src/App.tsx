@@ -5,6 +5,8 @@ import EventManager from './components/EventManager';
 import Insights from './components/Insights';
 import { useSimulation } from './hooks/useSimulation';
 
+const APP_VERSION = 'v1.1';
+
 // Lazy-load the chart chunk. Safe now that vite.config.ts forces a single React
 // copy via resolve.dedupe — the original root cause of the dispatcher error.
 const ChartView = lazy(() => import('./components/ChartView'));
@@ -167,7 +169,7 @@ function App() {
             <div className="logo-group">
               <span className="logo-icon">💰</span>
               <div>
-                <h1 className="app-title">Future Finance Planner</h1>
+                <h1 className="app-title">Future Finance Planner {APP_VERSION}</h1>
                 <p className="app-tagline">Plan your financial future in India</p>
               </div>
             </div>
