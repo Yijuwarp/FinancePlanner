@@ -1,4 +1,4 @@
-import { useMemo, memo } from 'react';
+import { useMemo, memo, useEffect, useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Legend,
@@ -49,6 +49,18 @@ const EventStartLabel = memo((props: any) => {
  */
 const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps) => {
   const hasEvents = events.length > 0;
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 600px)').matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 600px)');
+    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    setIsMobile(media.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
 
   /**
    * Pre-calculates which months have event "starts" to display vertical markers.
@@ -132,8 +144,8 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
       </div>
 
       <div className="chart-container">
-        <ResponsiveContainer width="100%" height={400}>
-          <AreaChart data={data} margin={{ top: 30, right: 10, left: 10, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={isMobile ? 320 : 400}>
+          <AreaChart data={data} margin={{ top: 30, right: 10, left: isMobile ? 0 : 10, bottom: isMobile ? 20 : 0 }}>
             <defs>
               <linearGradient id="gradientBaseline" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
@@ -149,10 +161,15 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
 
             <XAxis
               dataKey="label"
-              tick={{ fill: '#94a3b8', fontSize: 11 }}
+              tick={{ fill: '#94a3b8', fontSize: isMobile ? 10 : 11 }}
               tickLine={false}
               axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-              interval={tickInterval}
+              minTickGap={isMobile ? 28 : 14}
+              tickMargin={isMobile ? 8 : 4}
+              angle={isMobile ? -22 : 0}
+              textAnchor={isMobile ? 'end' : 'middle'}
+              height={isMobile ? 56 : 32}
+              interval={isMobile ? 'preserveStartEnd' : tickInterval}
             />
             <YAxis
               tick={{ fill: '#94a3b8', fontSize: 11 }}
