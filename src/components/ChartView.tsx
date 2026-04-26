@@ -125,6 +125,14 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
     [data.length]
   );
 
+  const chartData = useMemo(() => data.map((item) => ({
+    ...item,
+    baselinePositive: item.baselineBalance >= 0 ? item.baselineBalance : null,
+    baselineNegative: item.baselineBalance < 0 ? item.baselineBalance : null,
+    balancePositive: item.balance >= 0 ? item.balance : null,
+    balanceNegative: item.balance < 0 ? item.balance : null,
+  })), [data]);
+
   return (
     <div className={`chart-view ${isLagging ? 'chart-lagging' : ''}`}>
       <div className="chart-header">
@@ -145,15 +153,19 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
 
       <div className="chart-container">
         <ResponsiveContainer width="100%" height={isMobile ? 320 : 400}>
-          <AreaChart data={data} margin={{ top: 30, right: 10, left: isMobile ? 0 : 10, bottom: isMobile ? 20 : 0 }}>
+          <AreaChart data={chartData} margin={{ top: 30, right: 10, left: isMobile ? 0 : 10, bottom: isMobile ? 20 : 0 }}>
             <defs>
               <linearGradient id="gradientBaseline" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
                 <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="gradientEvents" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="gradientNegative" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#ef4444" stopOpacity={0.08} />
               </linearGradient>
             </defs>
 
@@ -197,7 +209,7 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
 
             <Area
               type="monotone"
-              dataKey="baselineBalance"
+              dataKey="baselinePositive"
               name="Baseline"
               stroke="#22c55e"
               strokeWidth={2.5}
@@ -207,20 +219,46 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
               animationDuration={isLagging ? 0 : 500}
               isAnimationActive={true}
             />
+            <Area
+              type="monotone"
+              dataKey="baselineNegative"
+              name="Baseline (Negative)"
+              stroke="#ef4444"
+              strokeWidth={2.5}
+              fill="url(#gradientNegative)"
+              dot={false}
+              activeDot={{ r: 4, stroke: '#ef4444', fill: '#0f172a' }}
+              animationDuration={isLagging ? 0 : 500}
+              isAnimationActive={true}
+            />
 
             {hasEvents && (
-              <Area
-                type="monotone"
-                dataKey="balance"
-                name="With Events"
-                stroke="#ef4444"
-                strokeWidth={2.5}
-                fill="url(#gradientEvents)"
-                dot={false}
-                activeDot={{ r: 4, stroke: '#ef4444', fill: '#0f172a' }}
-                animationDuration={isLagging ? 0 : 500}
-                isAnimationActive={true}
-              />
+              <>
+                <Area
+                  type="monotone"
+                  dataKey="balancePositive"
+                  name="With Events"
+                  stroke="#8b5cf6"
+                  strokeWidth={2.5}
+                  fill="url(#gradientEvents)"
+                  dot={false}
+                  activeDot={{ r: 4, stroke: '#8b5cf6', fill: '#0f172a' }}
+                  animationDuration={isLagging ? 0 : 500}
+                  isAnimationActive={true}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="balanceNegative"
+                  name="With Events (Negative)"
+                  stroke="#ef4444"
+                  strokeWidth={2.5}
+                  fill="url(#gradientNegative)"
+                  dot={false}
+                  activeDot={{ r: 4, stroke: '#ef4444', fill: '#0f172a' }}
+                  animationDuration={isLagging ? 0 : 500}
+                  isAnimationActive={true}
+                />
+              </>
             )}
           </AreaChart>
         </ResponsiveContainer>

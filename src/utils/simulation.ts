@@ -293,17 +293,23 @@ export function generateInsights(data: MonthData[]): Insight[] {
   }
 
   let lowestBalance = Infinity;
+  let highestBalance = -Infinity;
   let lowestMonth = data[0];
+  let highestMonth = data[0];
   for (const d of data) {
     if (d.balance < lowestBalance) {
       lowestBalance = d.balance;
       lowestMonth = d;
     }
+    if (d.balance > highestBalance) {
+      highestBalance = d.balance;
+      highestMonth = d;
+    }
   }
   
   insights.push({
     type: lowestBalance < 0 ? 'danger' : 'warning', icon: '📉',
-    message: `Lowest balance: ₹${formatINRShort(Math.abs(lowestBalance))} ${lowestBalance < 0 ? '(deficit)' : ''} in ${lowestMonth.label}`,
+    message: `Lowest balance: ₹${formatINRShort(Math.abs(lowestBalance))} ${lowestBalance < 0 ? '(deficit)' : ''} in ${lowestMonth.label} | Highest balance: ₹${formatINRShort(highestBalance)} in ${highestMonth.label}`,
   });
 
   if (negativeMonth) {
@@ -324,10 +330,31 @@ export function generateInsights(data: MonthData[]): Insight[] {
 
   const finalData = data[data.length - 1];
   const diff = finalData.baselineBalance - finalData.balance;
+  const fireMonth = data.find((d) => {
+    const eventCost = d.activeEvents.reduce((sum, ae) => sum + ae.oneTimeImpact + ae.recurringImpact, 0);
+    return d.returnsEarned >= d.expenses + eventCost;
+  });
+
+  if (fireMonth) {
+    insights.push({
+      type: 'success', icon: '🔥',
+      message: `FIRE runway achieved by ${fireMonth.label}: monthly returns can fund expenses + active life events`,
+    });
+  }
+
   if (diff > 0) {
+    const eventTotals = new Map<string, number>();
+    for (const d of data) {
+      for (const ae of d.activeEvents) {
+        eventTotals.set(ae.label, (eventTotals.get(ae.label) || 0) + ae.oneTimeImpact + ae.recurringImpact);
+      }
+    }
+    const [costliestEventLabel, costliestEventTotal] = Array.from(eventTotals.entries())
+      .sort((a, b) => b[1] - a[1])[0] || ['N/A', 0];
+
     insights.push({
       type: 'info', icon: '💡',
-      message: `Life events cost you ₹${formatINRShort(diff)} over the projected period`,
+      message: `Life events cost you ₹${formatINRShort(diff)} over the projected period. Costliest event: ${costliestEventLabel} (₹${formatINRShort(costliestEventTotal)})`,
     });
   }
 

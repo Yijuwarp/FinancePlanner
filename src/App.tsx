@@ -1,11 +1,12 @@
-import { useDeferredValue, lazy, Suspense, memo, useMemo } from 'react';
+import { useDeferredValue, lazy, Suspense, memo, useMemo, useState } from 'react';
 import { FinanceProvider, useFinance } from './context/FinanceContext';
 import InputPanel from './components/InputPanel';
 import EventManager from './components/EventManager';
 import Insights from './components/Insights';
+import OnboardingModal from './components/OnboardingModal';
 import { useSimulation } from './hooks/useSimulation';
 
-const APP_VERSION = 'v1.1';
+const APP_VERSION = 'v2.0';
 
 // Lazy-load the chart chunk. Safe now that vite.config.ts forces a single React
 // copy via resolve.dedupe — the original root cause of the dispatcher error.
@@ -28,14 +29,16 @@ const ChartSkeleton = () => (
 const DeferredResults = memo(({ 
   state, 
   isLagging,
-  setFilterLevel 
+  setFilterLevel,
+  pinChart,
+  setPinChart
 }: any) => {
   const { data, insights } = useSimulation(state);
 
   return (
     <>
       {/* Chart - Hero section */}
-      <section className="chart-section" id="chart-section">
+      <section className={`chart-section ${pinChart ? 'chart-section-pinned' : ''}`} id="chart-section">
         <Suspense fallback={<ChartSkeleton />}>
           <ChartView
             data={data}
@@ -60,6 +63,13 @@ const DeferredResults = memo(({
               <option value="all">All Events</option>
             </select>
           </div>
+          <button
+            type="button"
+            className={`pin-chart-btn ${pinChart ? 'pin-chart-btn-active' : ''}`}
+            onClick={() => setPinChart(!pinChart)}
+          >
+            {pinChart ? '📌 Chart pinned' : '📍 Pin chart'}
+          </button>
           <p className="filter-hint">
             * Red line always shows 100% accurate financial impact.
           </p>
@@ -79,6 +89,7 @@ const DeferredResults = memo(({
  */
 const AppContent = memo(() => {
   const finance = useFinance();
+  const [pinChart, setPinChart] = useState(false);
 
   // HIGH FREQUENCY: These are passed directly to inputs for 60fps local feedback
   const {
@@ -90,7 +101,7 @@ const AppContent = memo(() => {
     setInflation, setSalaryGrowth, setReturns,
     setRetireYears, setScaleEventsWithInflation,
     addEvent, updateEvent, removeEvent, highlightEvent,
-    setFilterLevel
+    setFilterLevel, applyOnboardingDefaults, onboardingComplete
   } = finance;
 
   // LOW FREQUENCY: Defer the entire state object for heavy calculations
@@ -110,11 +121,13 @@ const AppContent = memo(() => {
 
   return (
     <main className="app-main">
+      {!onboardingComplete && <OnboardingModal onComplete={applyOnboardingDefaults} />}
       <DeferredResults 
         state={deferredState} 
         isLagging={isLagging}
-        highlightEvent={highlightEvent}
         setFilterLevel={setFilterLevel}
+        pinChart={pinChart}
+        setPinChart={setPinChart}
       />
 
       {/* Controls */}

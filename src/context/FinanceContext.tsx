@@ -34,6 +34,15 @@ interface FinanceContextType extends FinanceState {
   updateEvent: (e: LifeEvent) => void;
   removeEvent: (id: string) => void;
   highlightEvent: (id: string | null) => void;
+  applyOnboardingDefaults: (values: {
+    age: number;
+    salary: number;
+    expenses: number;
+    years: number;
+    retireYears: number;
+    events: LifeEvent[];
+  }) => void;
+  onboardingComplete: boolean;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -55,6 +64,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [events, setEvents] = useState<LifeEvent[]>([]);
   const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null);
   const [filterLevel, setFilterLevel] = useState<'all' | 'medium' | 'high'>('high');
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   const addEvent = useCallback((event: LifeEvent) => {
     setEvents(prev => [...prev, event]);
@@ -73,6 +83,23 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setHighlightedEventId(id);
   }, []);
 
+  const applyOnboardingDefaults = useCallback((values: {
+    age: number;
+    salary: number;
+    expenses: number;
+    years: number;
+    retireYears: number;
+    events: LifeEvent[];
+  }) => {
+    setSalary(values.salary);
+    setExpenses(values.expenses);
+    setYears(values.years);
+    setRetireYears(values.retireYears);
+    setBalance(Math.max(values.salary * 6, 100000));
+    setEvents(values.events);
+    setOnboardingComplete(true);
+  }, []);
+
   const value = useMemo(() => ({
     balance, setBalance,
     salary, setSalary,
@@ -85,12 +112,15 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     scaleEventsWithInflation, setScaleEventsWithInflation,
     events, addEvent, updateEvent, removeEvent,
     highlightedEventId, highlightEvent,
-    filterLevel, setFilterLevel
+    filterLevel, setFilterLevel,
+    applyOnboardingDefaults,
+    onboardingComplete
   }), [
     balance, salary, expenses, years, inflation, 
     salaryGrowth, returns, retireYears, scaleEventsWithInflation, 
     events, addEvent, updateEvent, removeEvent, 
-    highlightedEventId, highlightEvent, filterLevel
+    highlightedEventId, highlightEvent, filterLevel,
+    applyOnboardingDefaults, onboardingComplete
   ]);
 
   return (
