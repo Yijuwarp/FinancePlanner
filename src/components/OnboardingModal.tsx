@@ -5,7 +5,7 @@ import {
   INDIAN_CITIES,
   INDIAN_JOBS,
   createSuggestedEvents,
-  findJobOption,
+  type JobOption,
   getTier,
   suggestOnboardingDefaults,
 } from '../utils/onboardingProfiles';
@@ -32,14 +32,14 @@ interface OnboardingModalProps {
 
 export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [age, setAge] = useState(28);
-  const [job, setJob] = useState<string | null>(null);
+  const [job, setJob] = useState<JobOption | null>(null);
   const [location, setLocation] = useState<string | null>(null);
   const [selectedEvents, setSelectedEvents] = useState<OnboardingEvent[]>([]);
   const [eventsCustomized, setEventsCustomized] = useState(false);
 
   const defaults = useMemo(
-    () => suggestOnboardingDefaults(age, job || 'Other', location || 'Other'),
-    [age, job, location],
+    () => suggestOnboardingDefaults(age, job?.role || 'Other', location || 'Other'),
+    [age, job?.role, location],
   );
 
   const suggestedEvents = useMemo(
@@ -57,6 +57,16 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
   }, [defaults, activeEvents]);
 
   const canStart = Boolean(job && location);
+  const jobOptions = useMemo(
+    () =>
+      INDIAN_JOBS.map((item) => ({
+        value: `${item.role}__${item.seniority}`,
+        label: item.label,
+        keywords: [item.role, item.seniority, ...item.searchTokens],
+      })),
+    [],
+  );
+  const cityOptions = useMemo(() => INDIAN_CITIES.map((city) => ({ value: city, label: city })), []);
 
   return (
     <div className="onboarding-overlay">
@@ -93,16 +103,25 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
           <SearchableSelect
             id="job-input"
             label="Job"
-            options={INDIAN_JOBS.map((item) => item.role)}
-            selectedValue={job}
+            options={jobOptions}
+            selectedValue={job ? `${job.role}__${job.seniority}` : null}
             placeholder="Search your job (e.g. Sales Manager, Software Engineer)"
-            onSelect={setJob}
+            onSelect={(value) => {
+              if (!value) {
+                setJob(null);
+                return;
+              }
+
+              const [role, seniority] = value.split('__');
+              const selected = INDIAN_JOBS.find((item) => item.role === role && item.seniority === seniority) || null;
+              setJob(selected);
+            }}
           />
 
           <SearchableSelect
             id="location-input"
             label="Location"
-            options={INDIAN_CITIES}
+            options={cityOptions}
             selectedValue={location}
             placeholder="Search your city"
             onSelect={setLocation}
@@ -152,7 +171,7 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
                 onComplete({
                   age,
-                  job: findJobOption(job),
+                  job: { role: job.role, seniority: job.seniority },
                   location,
                   tier: getTier(location),
                   salary: defaults.salary,

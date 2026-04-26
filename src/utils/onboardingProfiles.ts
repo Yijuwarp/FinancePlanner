@@ -4,27 +4,175 @@ import { getCurrentDateKey } from './dateUtils';
 export interface JobOption {
   role: string;
   seniority: string;
+  label: string;
+  searchTokens: string[];
+}
+
+export const ROLE_ENUM = [
+  'Software Engineer',
+  'Data Professional',
+  'IT / Systems Engineer',
+  'Product Manager',
+  'Designer (UI/UX)',
+  'Operations',
+  'Sales',
+  'Marketing',
+  'Human Resources',
+  'Finance',
+  'Banking',
+  'Insurance',
+  'Government',
+  'PSU',
+  'Teacher / Professor',
+  'Doctor',
+  'Nurse / Healthcare',
+  'Business Owner',
+  'Retail / Shop Owner',
+  'Freelancer / Consultant',
+  'Driver',
+  'Delivery / Gig',
+  'Technician',
+  'Student',
+  'Homemaker',
+  'Unemployed',
+] as const;
+
+const SENIORITY_LEVELS = [
+  'Entry',
+  'Individual Contributor',
+  'Senior',
+  'Manager',
+  'Director',
+  'Vice President',
+  'CXO',
+] as const;
+
+const SENIORITY_SYNONYMS: Record<string, string[]> = {
+  Entry: ['junior'],
+  Senior: ['senior'],
+  Manager: ['manager'],
+  Director: ['director'],
+  'Vice President': ['vp'],
+  CXO: ['ceo', 'cto', 'cfo', 'chief'],
+  'Individual Contributor': ['individual contributor', 'ic'],
+  None: ['none'],
+};
+
+const ROLE_SYNONYMS: Record<string, string[]> = {
+  'Software Engineer': ['engineer', 'developer'],
+  'IT / Systems Engineer': ['it', 'systems'],
+  'Data Professional': ['data'],
+  'Product Manager': ['product'],
+  'Designer (UI/UX)': ['design', 'designer', 'ui', 'ux'],
+  'Human Resources': ['hr'],
+  Operations: ['ops'],
+  Banking: ['bank'],
+  'Teacher / Professor': ['teacher', 'professor'],
+  Doctor: ['doctor'],
+  'Nurse / Healthcare': ['nurse', 'healthcare'],
+  'Business Owner': ['business'],
+  'Retail / Shop Owner': ['shop'],
+  'Freelancer / Consultant': ['freelance', 'consultant'],
+  Driver: ['driver'],
+  'Delivery / Gig': ['delivery', 'gig'],
+  Technician: ['electrician', 'plumber', 'technician'],
+  Sales: ['sales'],
+  Marketing: ['marketing'],
+  Finance: ['finance'],
+  Insurance: ['insurance'],
+};
+
+const NON_EARNING_ROLES = new Set(['Student', 'Homemaker', 'Unemployed']);
+
+function allowedSeniorities(role: string): string[] {
+  if (NON_EARNING_ROLES.has(role)) return ['None'];
+  if (['Driver', 'Delivery / Gig', 'Technician'].includes(role)) return ['Entry', 'Individual Contributor'];
+  if (['Business Owner', 'Retail / Shop Owner'].includes(role)) return ['Individual Contributor', 'Manager'];
+  if (role === 'Doctor') return ['Individual Contributor', 'Senior', 'Director'];
+  if (role === 'Teacher / Professor') return ['Individual Contributor', 'Senior', 'Manager'];
+  return [...SENIORITY_LEVELS];
+}
+
+function formatJobLabel(role: string, seniority: string): string {
+  if (seniority === 'None' || seniority === 'Individual Contributor') return role;
+  if (seniority === 'Entry') return `Junior ${role}`;
+  if (seniority === 'Senior') return `Senior ${role}`;
+  if (seniority === 'Manager') return `Manager - ${role}`;
+  if (seniority === 'Director') return `Director of ${role}`;
+  if (seniority === 'Vice President') return `VP - ${role}`;
+  if (seniority === 'CXO') return `CXO - ${role}`;
+  return role;
+}
+
+function buildSearchTokens(role: string, seniority: string, label: string): string[] {
+  return [
+    role,
+    seniority,
+    label,
+    ...(ROLE_SYNONYMS[role] || []),
+    ...(SENIORITY_SYNONYMS[seniority] || []),
+  ].map((token) => token.toLowerCase());
 }
 
 export const INDIAN_JOBS: JobOption[] = [
-  { role: 'Software Engineer', seniority: 'Mid-level' },
-  { role: 'IT Support / Services', seniority: 'Individual Contributor' },
-  { role: 'Private Company Employee', seniority: 'Mid-level' },
-  { role: 'Government Employee', seniority: 'Mid-level' },
-  { role: 'Teacher', seniority: 'Individual Contributor' },
-  { role: 'Nurse / Healthcare Worker', seniority: 'Individual Contributor' },
-  { role: 'Sales Executive', seniority: 'Individual Contributor' },
-  { role: 'Accountant', seniority: 'Individual Contributor' },
-  { role: 'Bank Employee', seniority: 'Mid-level' },
-  { role: 'Call Center / BPO', seniority: 'Individual Contributor' },
-  { role: 'Small Business Owner', seniority: 'Owner' },
-  { role: 'Shop Owner', seniority: 'Owner' },
-  { role: 'Freelancer', seniority: 'Individual Contributor' },
-  { role: 'Driver / Delivery', seniority: 'Individual Contributor' },
-  { role: 'Student', seniority: 'Individual Contributor' },
-  { role: 'Homemaker', seniority: 'Individual Contributor' },
-  { role: 'Other', seniority: 'Individual Contributor' },
+  ...ROLE_ENUM.flatMap((role) =>
+    allowedSeniorities(role).map((seniority) => {
+      const label = formatJobLabel(role, seniority);
+      return {
+        role,
+        seniority,
+        label,
+        searchTokens: buildSearchTokens(role, seniority, label),
+      };
+    }),
+  ),
+  {
+    role: 'Other',
+    seniority: 'Individual Contributor',
+    label: 'Other',
+    searchTokens: ['other'],
+  },
 ];
+
+export function searchJobOptions(query: string): JobOption[] {
+  const normalized = query.toLowerCase().trim();
+  if (!normalized) return INDIAN_JOBS.slice(0, 16);
+
+  const ranked = INDIAN_JOBS.map((option) => {
+    const label = option.label.toLowerCase();
+    const role = option.role.toLowerCase();
+    const seniority = option.seniority.toLowerCase();
+    const tokens = option.searchTokens;
+
+    let score = 999;
+
+    if (label === normalized || role === normalized || `${option.role} ${option.seniority}`.toLowerCase() === normalized) {
+      score = 0;
+    } else {
+      const words = normalized.split(/\s+/).filter(Boolean);
+      const roleAndSeniority = words.every((word) => role.includes(word) || seniority.includes(word));
+      const roleOnly = words.every((word) => role.includes(word));
+      const seniorityOnly = words.every((word) => seniority.includes(word));
+      const synonymMatch = words.every((word) => tokens.some((token) => token.includes(word)));
+
+      if (roleAndSeniority) score = 1;
+      else if (roleOnly) score = 2;
+      else if (seniorityOnly) score = 3;
+      else if (synonymMatch) score = 4;
+      else if (label.includes(normalized)) score = 5;
+    }
+
+    return { option, score };
+  })
+    .filter((entry) => entry.score < 999)
+    .sort((a, b) => a.score - b.score || a.option.label.localeCompare(b.option.label));
+
+  if (!ranked.length) {
+    return INDIAN_JOBS.filter((option) => option.role === 'Other');
+  }
+
+  return ranked.slice(0, 20).map((entry) => entry.option);
+}
 
 export const TIER_1_CITIES = [
   'Bangalore',
@@ -70,21 +218,31 @@ type JobCategory =
 
 const JOB_CATEGORY_MAP: Record<string, JobCategory> = {
   'Software Engineer': 'tech',
-  'IT Support / Services': 'tech',
-  'Private Company Employee': 'corporate',
-  'Government Employee': 'government',
-  Teacher: 'service',
-  'Nurse / Healthcare Worker': 'service',
-  'Sales Executive': 'corporate',
-  Accountant: 'corporate',
-  'Bank Employee': 'corporate',
-  'Call Center / BPO': 'corporate',
-  'Small Business Owner': 'self_employed',
-  'Shop Owner': 'self_employed',
-  Freelancer: 'self_employed',
-  'Driver / Delivery': 'service',
+  'Data Professional': 'tech',
+  'IT / Systems Engineer': 'tech',
+  'Product Manager': 'corporate',
+  'Designer (UI/UX)': 'corporate',
+  Operations: 'corporate',
+  Sales: 'corporate',
+  Marketing: 'corporate',
+  'Human Resources': 'corporate',
+  Finance: 'corporate',
+  Banking: 'corporate',
+  Insurance: 'corporate',
+  Government: 'government',
+  PSU: 'government',
+  'Teacher / Professor': 'service',
+  Doctor: 'service',
+  'Nurse / Healthcare': 'service',
+  'Business Owner': 'self_employed',
+  'Retail / Shop Owner': 'self_employed',
+  'Freelancer / Consultant': 'self_employed',
+  Driver: 'service',
+  'Delivery / Gig': 'service',
+  Technician: 'service',
   Student: 'student',
   Homemaker: 'homemaker',
+  Unemployed: 'student',
   Other: 'corporate',
 };
 
@@ -126,8 +284,13 @@ export function getTier(location: string): CityTier {
   return 3;
 }
 
-export function findJobOption(role: string): JobOption {
-  return INDIAN_JOBS.find((job) => job.role === role) || { role: 'Other', seniority: 'Individual Contributor' };
+export function findJobOption(labelOrRole: string): JobOption {
+  return INDIAN_JOBS.find((job) => job.label === labelOrRole || job.role === labelOrRole) || {
+    role: 'Other',
+    seniority: 'Individual Contributor',
+    label: 'Other',
+    searchTokens: ['other'],
+  };
 }
 
 function findEventKey(expectedKey: string): string | null {

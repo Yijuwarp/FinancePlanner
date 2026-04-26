@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 
+export interface SearchableOption {
+  value: string;
+  label: string;
+  keywords?: string[];
+}
+
 interface SearchableSelectProps {
   id: string;
   label: string;
-  options: string[];
+  options: SearchableOption[];
   selectedValue: string | null;
   placeholder: string;
   onSelect: (value: string | null) => void;
@@ -17,10 +23,18 @@ export default function SearchableSelect({
   placeholder,
   onSelect,
 }: SearchableSelectProps) {
-  const [query, setQuery] = useState(selectedValue || '');
+  const selectedOption = useMemo(
+    () => options.find((option) => option.value === selectedValue) || null,
+    [options, selectedValue],
+  );
+  const [query, setQuery] = useState(selectedOption?.label || '');
   const [open, setOpen] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState(selectedOption?.label || '');
 
-  const [debouncedQuery, setDebouncedQuery] = useState(selectedValue || '');
+  useEffect(() => {
+    setQuery(selectedOption?.label || '');
+    setDebouncedQuery(selectedOption?.label || '');
+  }, [selectedOption]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedQuery(query), 120);
@@ -32,20 +46,21 @@ export default function SearchableSelect({
     if (!q) return options.slice(0, 12);
 
     const scored = options
-      .filter((option) => q.length >= 2 || option.toLowerCase().startsWith(q))
       .map((option) => {
-        const lower = option.toLowerCase();
-        if (lower.startsWith(q)) return { option, score: 0 };
-        const index = lower.indexOf(q);
-        if (index >= 0) return { option, score: index + 1 };
-        const compactMatch = q.split('').every((ch) => lower.includes(ch));
-        return { option, score: compactMatch ? 50 : 999 };
+        const text = option.label.toLowerCase();
+        const keywordText = (option.keywords || []).join(' ').toLowerCase();
+        if (text === q) return { option, score: 0 };
+        if (text.startsWith(q)) return { option, score: 1 };
+        if (text.includes(q)) return { option, score: 2 };
+        if (keywordText.includes(q)) return { option, score: 3 };
+        return { option, score: 999 };
       })
       .filter((entry) => entry.score < 999)
-      .sort((a, b) => a.score - b.score);
+      .sort((a, b) => a.score - b.score || a.option.label.localeCompare(b.option.label));
 
     return scored.map((entry) => entry.option).slice(0, 12);
   }, [options, debouncedQuery]);
+  const visibleOptions = filtered.length > 0 ? filtered : options.filter((option) => option.label === 'Other').slice(0, 1);
 
   return (
     <div className="searchable-select">
@@ -56,7 +71,7 @@ export default function SearchableSelect({
         onChange={(e) => {
           const next = e.target.value;
           setQuery(next);
-          if (selectedValue && next !== selectedValue) {
+          if (selectedOption && next !== selectedOption.label) {
             onSelect(null);
           }
           setOpen(true);
@@ -65,10 +80,10 @@ export default function SearchableSelect({
         onBlur={() => {
           window.setTimeout(() => {
             setOpen(false);
-            const exact = options.find((option) => option.toLowerCase() === query.toLowerCase().trim());
+            const exact = options.find((option) => option.label.toLowerCase() === query.toLowerCase().trim());
             if (exact) {
-              setQuery(exact);
-              onSelect(exact);
+              setQuery(exact.label);
+              onSelect(exact.value);
             }
           }, 120);
         }}
@@ -76,20 +91,20 @@ export default function SearchableSelect({
         placeholder={placeholder}
       />
 
-      {open && filtered.length > 0 && (
+      {open && visibleOptions.length > 0 && (
         <div className="searchable-select-menu">
-          {filtered.map((option) => (
+          {visibleOptions.map((option) => (
             <button
-              key={option}
+              key={option.value}
               type="button"
-              className={`searchable-option ${selectedValue === option ? 'searchable-option-active' : ''}`}
+              className={`searchable-option ${selectedValue === option.value ? 'searchable-option-active' : ''}`}
               onClick={() => {
-                setQuery(option);
-                onSelect(option);
+                setQuery(option.label);
+                onSelect(option.value);
                 setOpen(false);
               }}
             >
-              {option}
+              {option.label}
             </button>
           ))}
         </div>
