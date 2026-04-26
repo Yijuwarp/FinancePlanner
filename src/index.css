@@ -71,6 +71,8 @@ body {
 .app {
   position: relative;
   min-height: 100vh;
+  width: 100%;
+  overflow-x: clip;
 }
 
 /* Ambient background glow effects */
@@ -251,8 +253,8 @@ body {
 
 .chart-container {
   border-radius: var(--radius-md);
-  overflow: hidden;
-  contain: layout style paint;
+  overflow: visible;
+  contain: layout style;
 }
 
 .chart-container .recharts-wrapper,
@@ -456,6 +458,11 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
+  width: 100%;
+}
+
+.controls-grid > * {
+  min-width: 0;
 }
 
 /* ========================================
@@ -558,6 +565,8 @@ body {
 
 .currency-input {
   flex: 1;
+  width: 100%;
+  min-width: 0;
   background: transparent;
   border: none;
   outline: none;
@@ -853,6 +862,8 @@ body {
 
 .duration-input-container {
   display: flex;
+  width: 100%;
+  min-width: 0;
   background: rgba(15, 23, 42, 0.4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -862,6 +873,7 @@ body {
 
 .duration-main-wrapper {
   flex: 1;
+  min-width: 0;
   border: none !important;
   margin-top: 0 !important;
 }
@@ -873,6 +885,8 @@ body {
 
 .date-input {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 10px 12px;
   background: rgba(15, 23, 42, 0.4);
   border: 1px solid var(--color-border);
@@ -895,6 +909,7 @@ body {
   padding: 4px;
   gap: 2px;
   background: rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
 }
 
 .unit-btn {
@@ -923,6 +938,10 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+.config-row > * {
+  min-width: 0;
 }
 
 @media (max-width: 500px) {
@@ -1343,18 +1362,22 @@ body {
 
   .event-chips {
     gap: 6px;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 4px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    overflow-x: hidden;
+    flex-wrap: wrap;
+    padding-bottom: 0;
   }
 
   .event-chip {
     padding: 6px 10px;
     font-size: 0.75rem;
-    flex: 0 0 auto;
-    white-space: nowrap;
+    flex: 0 1 auto;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .chip-label {
+    white-space: normal;
+    word-break: break-word;
   }
 
   .repeat-inputs {
