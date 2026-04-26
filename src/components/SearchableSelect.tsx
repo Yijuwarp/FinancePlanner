@@ -4,22 +4,26 @@ interface SearchableSelectProps {
   id: string;
   label: string;
   options: string[];
-  value: string;
-  onChange: (value: string) => void;
+  selectedValue: string | null;
+  placeholder: string;
+  onSelect: (value: string | null) => void;
 }
 
-export default function SearchableSelect({ id, label, options, value, onChange }: SearchableSelectProps) {
-  const [query, setQuery] = useState(value);
+export default function SearchableSelect({
+  id,
+  label,
+  options,
+  selectedValue,
+  placeholder,
+  onSelect,
+}: SearchableSelectProps) {
+  const [query, setQuery] = useState(selectedValue || '');
   const [open, setOpen] = useState(false);
 
-  const [debouncedQuery, setDebouncedQuery] = useState(value);
+  const [debouncedQuery, setDebouncedQuery] = useState(selectedValue || '');
 
   useEffect(() => {
-    setQuery(value);
-  }, [value]);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setDebouncedQuery(query), 150);
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), 120);
     return () => window.clearTimeout(timeout);
   }, [query]);
 
@@ -50,15 +54,26 @@ export default function SearchableSelect({ id, label, options, value, onChange }
         id={id}
         value={query}
         onChange={(e) => {
-          setQuery(e.target.value);
+          const next = e.target.value;
+          setQuery(next);
+          if (selectedValue && next !== selectedValue) {
+            onSelect(null);
+          }
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => {
-          window.setTimeout(() => setOpen(false), 120);
+          window.setTimeout(() => {
+            setOpen(false);
+            const exact = options.find((option) => option.toLowerCase() === query.toLowerCase().trim());
+            if (exact) {
+              setQuery(exact);
+              onSelect(exact);
+            }
+          }, 120);
         }}
-        className="currency-input"
-        placeholder="Type to search"
+        className="currency-input searchable-input"
+        placeholder={placeholder}
       />
 
       {open && filtered.length > 0 && (
@@ -67,10 +82,10 @@ export default function SearchableSelect({ id, label, options, value, onChange }
             <button
               key={option}
               type="button"
-              className={`searchable-option ${value === option ? 'searchable-option-active' : ''}`}
+              className={`searchable-option ${selectedValue === option ? 'searchable-option-active' : ''}`}
               onClick={() => {
                 setQuery(option);
-                onChange(option);
+                onSelect(option);
                 setOpen(false);
               }}
             >

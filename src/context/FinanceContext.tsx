@@ -36,11 +36,15 @@ interface FinanceContextType extends FinanceState {
   highlightEvent: (id: string | null) => void;
   applyOnboardingDefaults: (values: {
     age: number;
+    job?: { role: string; seniority: string };
+    location?: string;
+    tier?: number;
     salary: number;
     expenses: number;
     years: number;
     retireYears: number;
     savings: number;
+    life_events?: Array<{ type: string; age: number; cost: number; enabled: boolean }>;
     events: LifeEvent[];
   }) => void;
   onboardingComplete: boolean;
@@ -86,11 +90,15 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const applyOnboardingDefaults = useCallback((values: {
     age: number;
+    job?: { role: string; seniority: string };
+    location?: string;
+    tier?: number;
     salary: number;
     expenses: number;
     years: number;
     retireYears: number;
     savings: number;
+    life_events?: Array<{ type: string; age: number; cost: number; enabled: boolean }>;
     events: LifeEvent[];
   }) => {
     setSalary(values.salary);

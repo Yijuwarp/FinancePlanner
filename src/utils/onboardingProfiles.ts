@@ -1,24 +1,30 @@
 import { createEventFromTemplate, EVENT_TEMPLATES, type LifeEvent } from './eventTemplates';
 import { getCurrentDateKey } from './dateUtils';
 
-export const INDIAN_JOBS = [
-  'Software Engineer',
-  'IT Support / Services',
-  'Private Company Employee',
-  'Government Employee',
-  'Teacher',
-  'Nurse / Healthcare Worker',
-  'Sales Executive',
-  'Accountant',
-  'Bank Employee',
-  'Call Center / BPO',
-  'Small Business Owner',
-  'Shop Owner',
-  'Freelancer',
-  'Driver / Delivery',
-  'Student',
-  'Homemaker',
-] as const;
+export interface JobOption {
+  role: string;
+  seniority: string;
+}
+
+export const INDIAN_JOBS: JobOption[] = [
+  { role: 'Software Engineer', seniority: 'Mid-level' },
+  { role: 'IT Support / Services', seniority: 'Individual Contributor' },
+  { role: 'Private Company Employee', seniority: 'Mid-level' },
+  { role: 'Government Employee', seniority: 'Mid-level' },
+  { role: 'Teacher', seniority: 'Individual Contributor' },
+  { role: 'Nurse / Healthcare Worker', seniority: 'Individual Contributor' },
+  { role: 'Sales Executive', seniority: 'Individual Contributor' },
+  { role: 'Accountant', seniority: 'Individual Contributor' },
+  { role: 'Bank Employee', seniority: 'Mid-level' },
+  { role: 'Call Center / BPO', seniority: 'Individual Contributor' },
+  { role: 'Small Business Owner', seniority: 'Owner' },
+  { role: 'Shop Owner', seniority: 'Owner' },
+  { role: 'Freelancer', seniority: 'Individual Contributor' },
+  { role: 'Driver / Delivery', seniority: 'Individual Contributor' },
+  { role: 'Student', seniority: 'Individual Contributor' },
+  { role: 'Homemaker', seniority: 'Individual Contributor' },
+  { role: 'Other', seniority: 'Individual Contributor' },
+];
 
 export const TIER_1_CITIES = [
   'Bangalore',
@@ -51,6 +57,8 @@ export const TIER_2_CITIES = [
 
 export const INDIAN_CITIES = [...TIER_1_CITIES, ...TIER_2_CITIES, 'Other'];
 
+export type CityTier = 1 | 2 | 3;
+
 type JobCategory =
   | 'tech'
   | 'corporate'
@@ -77,9 +85,10 @@ const JOB_CATEGORY_MAP: Record<string, JobCategory> = {
   'Driver / Delivery': 'service',
   Student: 'student',
   Homemaker: 'homemaker',
+  Other: 'corporate',
 };
 
-const SALARY_TABLE: Record<JobCategory, Record<1 | 2 | 3, number>> = {
+const SALARY_TABLE: Record<JobCategory, Record<CityTier, number>> = {
   tech: { 1: 120000, 2: 70000, 3: 45000 },
   corporate: { 1: 60000, 2: 45000, 3: 30000 },
   government: { 1: 70000, 2: 55000, 3: 40000 },
@@ -103,7 +112,7 @@ export interface OnboardingDefaults {
   job: string;
   jobCategory: JobCategory;
   location: string;
-  tier: 1 | 2 | 3;
+  tier: CityTier;
   salary: number;
   expenses: number;
   savings: number;
@@ -111,10 +120,14 @@ export interface OnboardingDefaults {
   retireYears: number;
 }
 
-function getTier(location: string): 1 | 2 | 3 {
+export function getTier(location: string): CityTier {
   if (TIER_1_CITIES.includes(location as (typeof TIER_1_CITIES)[number])) return 1;
   if (TIER_2_CITIES.includes(location as (typeof TIER_2_CITIES)[number])) return 2;
   return 3;
+}
+
+export function findJobOption(role: string): JobOption {
+  return INDIAN_JOBS.find((job) => job.role === role) || { role: 'Other', seniority: 'Individual Contributor' };
 }
 
 function findEventKey(expectedKey: string): string | null {
