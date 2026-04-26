@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface SearchableSelectProps {
   id: string;
@@ -12,11 +12,36 @@ export default function SearchableSelect({ id, label, options, value, onChange }
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
 
+  const [debouncedQuery, setDebouncedQuery] = useState(value);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), 150);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
   const filtered = useMemo(() => {
-    const q = query.toLowerCase().trim();
+    const q = debouncedQuery.toLowerCase().trim();
     if (!q) return options.slice(0, 12);
-    return options.filter(option => option.toLowerCase().includes(q)).slice(0, 12);
-  }, [options, query]);
+
+    const scored = options
+      .filter((option) => q.length >= 2 || option.toLowerCase().startsWith(q))
+      .map((option) => {
+        const lower = option.toLowerCase();
+        if (lower.startsWith(q)) return { option, score: 0 };
+        const index = lower.indexOf(q);
+        if (index >= 0) return { option, score: index + 1 };
+        const compactMatch = q.split('').every((ch) => lower.includes(ch));
+        return { option, score: compactMatch ? 50 : 999 };
+      })
+      .filter((entry) => entry.score < 999)
+      .sort((a, b) => a.score - b.score);
+
+    return scored.map((entry) => entry.option).slice(0, 12);
+  }, [options, debouncedQuery]);
 
   return (
     <div className="searchable-select">

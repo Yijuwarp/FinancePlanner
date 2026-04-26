@@ -1,90 +1,208 @@
-import { createEventFromTemplate, type LifeEvent } from './eventTemplates';
+import { createEventFromTemplate, EVENT_TEMPLATES, type LifeEvent } from './eventTemplates';
 import { getCurrentDateKey } from './dateUtils';
 
 export const INDIAN_JOBS = [
-  'Software Engineer', 'Teacher', 'Accountant', 'Sales Executive', 'Nurse',
-  'Government Officer', 'Bank Employee', 'Small Business Owner',
-  'Customer Support', 'Factory Supervisor', 'Marketing Executive',
-  'Operations Manager', 'Civil Engineer', 'Pharmacist', 'Graphic Designer',
-  'HR Executive', 'Delivery Partner', 'Electrician', 'Mechanic', 'Freelancer'
-];
+  'Software Engineer',
+  'IT Support / Services',
+  'Private Company Employee',
+  'Government Employee',
+  'Teacher',
+  'Nurse / Healthcare Worker',
+  'Sales Executive',
+  'Accountant',
+  'Bank Employee',
+  'Call Center / BPO',
+  'Small Business Owner',
+  'Shop Owner',
+  'Freelancer',
+  'Driver / Delivery',
+  'Student',
+  'Homemaker',
+] as const;
 
-export const INDIAN_CITIES = [
-  'Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Chennai', 'Pune', 'Kolkata',
-  'Ahmedabad', 'Jaipur', 'Surat', 'Lucknow', 'Indore', 'Bhopal', 'Kochi',
-  'Chandigarh', 'Nagpur', 'Patna', 'Visakhapatnam', 'Coimbatore', 'Noida'
-];
+export const TIER_1_CITIES = [
+  'Bangalore',
+  'Mumbai',
+  'Delhi',
+  'Hyderabad',
+  'Chennai',
+  'Pune',
+  'Gurgaon',
+  'Noida',
+  'Kolkata',
+] as const;
 
-const JOB_SALARY_MAP: Record<string, number> = {
-  'Software Engineer': 130000,
-  'Teacher': 50000,
-  'Accountant': 65000,
-  'Sales Executive': 60000,
-  'Nurse': 55000,
-  'Government Officer': 70000,
-  'Bank Employee': 62000,
-  'Small Business Owner': 90000,
-  'Customer Support': 42000,
-  'Factory Supervisor': 52000,
-  'Marketing Executive': 70000,
-  'Operations Manager': 85000,
-  'Civil Engineer': 80000,
-  'Pharmacist': 55000,
-  'Graphic Designer': 65000,
-  'HR Executive': 70000,
-  'Delivery Partner': 35000,
-  'Electrician': 45000,
-  'Mechanic': 42000,
-  'Freelancer': 60000,
+export const TIER_2_CITIES = [
+  'Ahmedabad',
+  'Jaipur',
+  'Chandigarh',
+  'Indore',
+  'Lucknow',
+  'Kochi',
+  'Coimbatore',
+  'Vadodara',
+  'Bhopal',
+  'Surat',
+  'Nagpur',
+  'Mysore',
+  'Visakhapatnam',
+  'Vijayawada',
+] as const;
+
+export const INDIAN_CITIES = [...TIER_1_CITIES, ...TIER_2_CITIES, 'Other'];
+
+type JobCategory =
+  | 'tech'
+  | 'corporate'
+  | 'government'
+  | 'service'
+  | 'self_employed'
+  | 'student'
+  | 'homemaker';
+
+const JOB_CATEGORY_MAP: Record<string, JobCategory> = {
+  'Software Engineer': 'tech',
+  'IT Support / Services': 'tech',
+  'Private Company Employee': 'corporate',
+  'Government Employee': 'government',
+  Teacher: 'service',
+  'Nurse / Healthcare Worker': 'service',
+  'Sales Executive': 'corporate',
+  Accountant: 'corporate',
+  'Bank Employee': 'corporate',
+  'Call Center / BPO': 'corporate',
+  'Small Business Owner': 'self_employed',
+  'Shop Owner': 'self_employed',
+  Freelancer: 'self_employed',
+  'Driver / Delivery': 'service',
+  Student: 'student',
+  Homemaker: 'homemaker',
 };
 
-const LOCATION_MULTIPLIER: Record<string, number> = {
-  Mumbai: 1.18,
-  Delhi: 1.12,
-  Bengaluru: 1.15,
-  Hyderabad: 1.05,
-  Chennai: 1.03,
-  Pune: 1.04,
+const SALARY_TABLE: Record<JobCategory, Record<1 | 2 | 3, number>> = {
+  tech: { 1: 120000, 2: 70000, 3: 45000 },
+  corporate: { 1: 60000, 2: 45000, 3: 30000 },
+  government: { 1: 70000, 2: 55000, 3: 40000 },
+  service: { 1: 40000, 2: 30000, 3: 20000 },
+  self_employed: { 1: 80000, 2: 50000, 3: 35000 },
+  student: { 1: 0, 2: 0, 3: 0 },
+  homemaker: { 1: 0, 2: 0, 3: 0 },
 };
 
-export function suggestOnboardingDefaults(age: number, job: string, location: string) {
-  const normalizedAge = Math.min(60, Math.max(21, age));
-  const baseSalary = JOB_SALARY_MAP[job] || 65000;
-  const locationMultiplier = LOCATION_MULTIPLIER[location] || 1;
-  const ageMultiplier = normalizedAge < 30 ? 0.85 : normalizedAge < 40 ? 1 : 1.08;
+const eventAliases: Record<string, string[]> = {
+  higher_education: ['education'],
+  marriage: ['wedding'],
+  house_purchase: ['house'],
+  child: ['baby'],
+  vehicle: ['car'],
+  retirement: ['retirement'],
+};
 
-  const salary = Math.round(baseSalary * locationMultiplier * ageMultiplier);
-  const expenses = Math.round(salary * (locationMultiplier > 1.1 ? 0.62 : 0.55));
-  const years = Math.max(5, Math.min(50, 80 - (normalizedAge + 10)));
-  const retireYears = Math.max(1, Math.min(years, 60 - normalizedAge));
-
-  return { salary, expenses, years, retireYears };
+export interface OnboardingDefaults {
+  age: number;
+  job: string;
+  jobCategory: JobCategory;
+  location: string;
+  tier: 1 | 2 | 3;
+  salary: number;
+  expenses: number;
+  savings: number;
+  years: number;
+  retireYears: number;
 }
 
-export function suggestLifeEventKeys(age: number, job: string): string[] {
-  const keys = new Set<string>(['health_insurance']);
-
-  if (age < 30) {
-    keys.add('phone');
-    keys.add('domestic_trip');
-    keys.add('car');
-  } else if (age < 40) {
-    keys.add('house');
-    keys.add('parents');
-    keys.add('life_insurance');
-  } else {
-    keys.add('education');
-    keys.add('parents');
-    keys.add('life_insurance');
-  }
-
-  if (job === 'Small Business Owner' || job === 'Freelancer') {
-    keys.add('emergency');
-  }
-
-  return Array.from(keys);
+function getTier(location: string): 1 | 2 | 3 {
+  if (TIER_1_CITIES.includes(location as (typeof TIER_1_CITIES)[number])) return 1;
+  if (TIER_2_CITIES.includes(location as (typeof TIER_2_CITIES)[number])) return 2;
+  return 3;
 }
 
-export function createSuggestedEvents(keys: string[]): LifeEvent[] {
-  return keys.map((key, index) => createEventFromTemplate(key, getCurrentDateKey(2 + index * 4)));
+function findEventKey(expectedKey: string): string | null {
+  const aliases = eventAliases[expectedKey] || [];
+  return aliases.find((key) => Boolean(EVENT_TEMPLATES[key])) || null;
+}
+
+function buildEvent(templateKey: string, ageOffset: number, currentAge: number, amount?: number): LifeEvent {
+  const ageForEvent = Math.min(80, Math.max(currentAge + ageOffset, currentAge));
+  const date = getCurrentDateKey((ageForEvent - currentAge) * 12);
+  const base = createEventFromTemplate(templateKey, date);
+
+  if (amount !== undefined) {
+    base.amount = amount;
+  }
+
+  return base;
+}
+
+export function suggestOnboardingDefaults(age: number, job: string, location: string): OnboardingDefaults {
+  const normalizedAge = Math.min(60, Math.max(18, age));
+  const jobCategory = JOB_CATEGORY_MAP[job] || 'corporate';
+  const tier = getTier(location);
+
+  const salary = SALARY_TABLE[jobCategory][tier];
+
+  let baseRatio = ({ 1: 0.7, 2: 0.6, 3: 0.5 } as const)[tier];
+  if (jobCategory === 'government') baseRatio -= 0.05;
+  if (jobCategory === 'self_employed') baseRatio += 0.05;
+
+  let expenses = Math.round(salary * baseRatio);
+
+  if (jobCategory === 'student') expenses = tier === 1 ? 15000 : tier === 2 ? 12000 : 10000;
+  if (jobCategory === 'homemaker') expenses = tier === 1 ? 40000 : tier === 2 ? 30000 : 20000;
+
+  const savings = normalizedAge < 25 ? salary * 2 : normalizedAge < 35 ? salary * 4 : salary * 8;
+  const years = Math.max(10, 80 - (normalizedAge + 10));
+  const retireYears = Math.max(1, 60 - normalizedAge);
+
+  return {
+    age: normalizedAge,
+    job,
+    jobCategory,
+    location,
+    tier,
+    salary,
+    expenses,
+    savings,
+    years,
+    retireYears,
+  };
+}
+
+export function createSuggestedEvents(age: number, defaults: OnboardingDefaults): LifeEvent[] {
+  const events: LifeEvent[] = [];
+
+  const educationKey = findEventKey('higher_education');
+  const marriageKey = findEventKey('marriage');
+  const childKey = findEventKey('child');
+  const houseKey = findEventKey('house_purchase');
+  const vehicleKey = findEventKey('vehicle');
+  const retirementKey = findEventKey('retirement');
+
+  if (age <= 30 && educationKey) events.push(buildEvent(educationKey, 3, age, 1500000));
+  if (age >= 23 && age <= 35 && marriageKey && defaults.jobCategory !== 'student') {
+    events.push(buildEvent(marriageKey, 4, age, 1000000));
+  }
+
+  if (age >= 25 && age <= 40 && defaults.jobCategory !== 'student') {
+    if (childKey) events.push(buildEvent(childKey, 5, age, 1500000));
+    if (houseKey) {
+      const houseCost = defaults.tier === 1 ? 7000000 : defaults.tier === 2 ? 5000000 : 3000000;
+      events.push(buildEvent(houseKey, 7, age, houseCost));
+    }
+  }
+
+  if (vehicleKey) {
+    const vehicle = buildEvent(vehicleKey, 3, age, 800000);
+    vehicle.amount = 0;
+    vehicle.monthlyImpact = 0;
+    events.push(vehicle);
+  }
+
+  if (retirementKey) {
+    const retirementAtAge = Math.max(60, age);
+    const retirement = buildEvent(retirementKey, retirementAtAge - age, age, defaults.expenses * 12 * 20);
+    events.push(retirement);
+  }
+
+  return events;
 }

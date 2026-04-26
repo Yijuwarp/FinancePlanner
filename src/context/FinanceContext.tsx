@@ -40,6 +40,7 @@ interface FinanceContextType extends FinanceState {
     expenses: number;
     years: number;
     retireYears: number;
+    savings: number;
     events: LifeEvent[];
   }) => void;
   onboardingComplete: boolean;
@@ -89,13 +90,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     expenses: number;
     years: number;
     retireYears: number;
+    savings: number;
     events: LifeEvent[];
   }) => {
     setSalary(values.salary);
     setExpenses(values.expenses);
     setYears(values.years);
     setRetireYears(values.retireYears);
-    setBalance(Math.max(values.salary * 6, 100000));
+    setBalance(Math.max(values.savings, 100000));
     setEvents(values.events);
     setOnboardingComplete(true);
   }, []);
