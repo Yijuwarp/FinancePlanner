@@ -70,9 +70,6 @@ const DeferredResults = memo(({
           >
             {pinChart ? '📌 Chart pinned' : '📍 Pin chart'}
           </button>
-          <p className="filter-hint">
-            * Red line always shows 100% accurate financial impact.
-          </p>
         </div>
       </section>
 

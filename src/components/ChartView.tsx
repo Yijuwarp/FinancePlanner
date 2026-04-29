@@ -212,6 +212,7 @@ const ChartView = memo(({ data, events, filterLevel, isLagging }: ChartViewProps
               dataKey="baselinePositive"
               name="Baseline"
               stroke="#22c55e"
+              strokeDasharray="6 4"
               strokeWidth={2.5}
               fill="url(#gradientBaseline)"
               dot={false}

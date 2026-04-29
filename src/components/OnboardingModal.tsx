@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import SearchableSelect from './SearchableSelect';
-import type { LifeEvent } from '../utils/eventTemplates';
+import { EVENT_TEMPLATES, createEventFromTemplate, type LifeEvent } from '../utils/eventTemplates';
+import { getCurrentDateKey } from '../utils/dateUtils';
 import {
   INDIAN_CITIES,
   INDIAN_JOBS,
@@ -68,6 +69,25 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
   );
   const cityOptions = useMemo(() => INDIAN_CITIES.map((city) => ({ value: city, label: city })), []);
 
+  const eventTemplateOptions = useMemo(
+    () => Object.entries(EVENT_TEMPLATES).map(([key, template]) => ({ value: key, label: `${template.emoji} ${template.label}` })),
+    [],
+  );
+
+  const [eventTemplateKey, setEventTemplateKey] = useState(eventTemplateOptions[0]?.value ?? 'car');
+
+  const addOnboardingEvent = () => {
+    setEventsCustomized(true);
+    setSelectedEvents((prev) => {
+      const source = prev.length > 0 ? prev : suggestedEvents;
+      const newEvent = {
+        ...createEventFromTemplate(eventTemplateKey, getCurrentDateKey(12)),
+        enabled: true,
+      };
+      return [...source, newEvent];
+    });
+  };
+
   return (
     <div className="onboarding-overlay">
       <div className="onboarding-modal">
@@ -129,6 +149,18 @@ export default function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
           <div className="onboarding-events">
             <h3 className="event-list-title">Life Events</h3>
+            <div className="event-config-actions" style={{ marginBottom: 12 }}>
+              <select
+                className="filter-select"
+                value={eventTemplateKey}
+                onChange={(e) => setEventTemplateKey(e.target.value)}
+              >
+                {eventTemplateOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <button type="button" className="add-event-btn" onClick={addOnboardingEvent}>+ Add event</button>
+            </div>
             <div className="event-chips event-chips-horizontal" role="list">
               {displayedEvents.map((event) => (
                 <div key={event.id} className="event-chip event-chip-selected" role="listitem">
