@@ -1479,11 +1479,11 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(2, 6, 23, 0.85);
-  z-index: 30;
+  z-index: 120;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 40px 16px;
+  padding: 88px 16px 40px;
   overflow-y: auto;
 }
 
