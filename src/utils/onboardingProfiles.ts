@@ -428,10 +428,7 @@ export function createSuggestedEvents(age: number, defaults: OnboardingDefaults)
   }
 
   if (vehicleKey) {
-    const vehicle = buildEvent(vehicleKey, 3, age, 800000);
-    vehicle.amount = 0;
-    vehicle.monthlyImpact = 0;
-    events.push(vehicle);
+    events.push(buildEvent(vehicleKey, 3, age));
   }
 
   if (retirementKey) {
